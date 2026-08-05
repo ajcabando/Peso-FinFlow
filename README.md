@@ -49,6 +49,10 @@ flutter analyze                      # lint
 
 The web target ships a SQLite WASM build (`web/sqlite3.wasm` + `web/drift_worker.js`) so the database runs fully in the browser with File System API persistence. Build with `flutter build web` and serve the `build/web` directory.
 
+### Release artifacts
+
+Android APK (`dist/FinFlow-v0.1.0.apk`), macOS DMG and iOS builds are covered in [`docs/BUILDING.md`](docs/BUILDING.md). The Android toolchain is installed on this machine; macOS/iOS need Xcode (install steps in the guide).
+
 ---
 
 ## Architecture

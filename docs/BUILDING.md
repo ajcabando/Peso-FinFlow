@@ -42,18 +42,24 @@ flutter build apk --release
 
 A copy with a versioned name lives at `dist/FinFlow-v0.1.0.apk` (signed, verified with `apksigner`).
 
-> **Signing note:** `android/app/build.gradle.kts` currently signs *release* builds with the
-> **debug** keystore (the stock Flutter template default). That's fine for sideloading and testing.
-> For Play Store / wider distribution, generate a real release keystore:
+> **Signing note:** release builds now use a dedicated release keystore —
+> `android/app/finflow-release.jks` (alias `finflow`, RSA 2048, 10,000-day validity).
+> Credentials live in **`android/key.properties`**, which is gitignored (never commit it).
+> When `key.properties` is missing, Gradle falls back to the debug signing config so
+> contributors can still build with `flutter run --release`.
+>
+> **⚠️ Back up the keystore + password.** Updates to any installed app must be signed
+> with the *same* key — losing `finflow-release.jks` or its password means you can never
+> update the app (or publish to Play Store) again. Store a copy somewhere safe
+> (password manager + offline backup), e.g.:
 >
 > ```bash
-> keytool -genkey -v -keystore ~/.android/finflow-release.jks -keyalg RSA \
->   -keysize 2048 -validity 10000 -alias finflow
+> cp android/app/finflow-release.jks ~/Backups/finflow-release.jks
+> # plus note the passwords from android/key.properties
 > ```
 >
-> then wire it into `android/app/build.gradle.kts` (a `signingConfigs.release` block with
-> `storeFile`/`storePassword`/`keyAlias`/`keyPassword` from `~/.gradle/gradle.properties`
-> or env vars — never commit secrets).
+> For Play Store, use Play App Signing (Google holds the upload key; you keep a separate
+> upload key).
 
 To install on a connected device/emulator:
 

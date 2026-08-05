@@ -69,6 +69,29 @@ class TransactionRepositoryImpl implements TransactionRepository {
       _db.transactionDao.getContextById(id);
 
   @override
+  Future<List<TransactionContext>> contextsBetween({
+    required DateTime from,
+    required DateTime to,
+  }) => _db.transactionDao.contextsBetween(from: from, to: to);
+
+  @override
+  Future<List<TransactionContext>> contextPage({
+    required int limit,
+    required int offset,
+    String? search,
+    TransactionType? type,
+  }) => _db.transactionDao.contextPage(
+    limit: limit,
+    offset: offset,
+    search: search,
+    type: type,
+  );
+
+  @override
+  Stream<int> watchContextCount({String? search, TransactionType? type}) =>
+      _db.transactionDao.watchContextCount(search: search, type: type);
+
+  @override
   Future<List<MonthlyCashFlow>> monthlyCashFlow({int months = 6}) =>
       _db.transactionDao.monthlyCashFlow(months: months);
 

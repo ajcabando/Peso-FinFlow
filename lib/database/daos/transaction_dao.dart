@@ -4,6 +4,7 @@ import '../../features/accounts/domain/enums/account_kind.dart';
 import '../../features/accounts/domain/enums/account_type.dart';
 import '../../features/transactions/domain/enums/ledger_direction.dart';
 import '../../features/transactions/domain/enums/normal_balance_side.dart';
+import '../../features/transactions/domain/enums/transaction_type.dart';
 import '../../features/transactions/domain/models/balance_point.dart';
 import '../../features/transactions/domain/models/category_spend.dart';
 import '../../features/transactions/domain/models/financial_transaction.dart';
@@ -73,6 +74,19 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
     final rows = await query.get();
     final grouped = _groupContexts(rows);
     return grouped.isEmpty ? null : grouped.first;
+  }
+
+  /// Enriched transactions within the half-open range `[from, to)`, newest
+  /// first (used by the reports page and exports).
+  Future<List<TransactionContext>> contextsBetween({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final query = _contextQuery()
+      ..where(transactions.occurredAt.isBiggerOrEqualValue(from))
+      ..where(transactions.occurredAt.isSmallerThanValue(to));
+    final rows = await query.get();
+    return _groupContexts(rows);
   }
 
   /// Every transaction, newest first (used by the full list screen).
@@ -369,6 +383,92 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
           ),
         )
         .toList();
+  }
+
+  /// Windowed, filtered page of enriched transactions for the full list
+  /// screen. [search] matches the merchant, note or account/category name
+  /// (SQLite `LIKE` is case-insensitive); [type] narrows the type.
+  Future<List<TransactionContext>> contextPage({
+    required int limit,
+    required int offset,
+    String? search,
+    TransactionType? type,
+  }) async {
+    final ids = await _contextPageIds(
+      limit: limit,
+      offset: offset,
+      search: search,
+      type: type,
+    );
+    if (ids.isEmpty) return const [];
+
+    final rows = await (_contextQuery()..where(transactions.id.isIn(ids))).get();
+    final grouped = _groupContexts(rows);
+    final byId = {for (final c in grouped) c.transaction.id: c};
+    // The ids are already in display order — rebuild in that exact order so
+    // pagination boundaries line up between pages.
+    return [
+      for (final id in ids)
+        if (byId.containsKey(id)) byId[id]!,
+    ];
+  }
+
+  /// Reactive count of transactions matching the same filters as
+  /// [contextPage]; total changes drive the list's refresh-on-write.
+  Stream<int> watchContextCount({String? search, TransactionType? type}) {
+    final query = selectOnly(transactions)
+      ..addColumns([transactions.id.count()]);
+    for (final filter in _contextFilters(search: search, type: type)) {
+      query.where(filter);
+    }
+    // A `COUNT` without grouping always yields exactly one row.
+    return query.map((row) => row.read(transactions.id.count()) ?? 0).watchSingle();
+  }
+
+  /// Ordered, windowed transaction ids matching the current filters.
+  Future<List<String>> _contextPageIds({
+    required int limit,
+    required int offset,
+    String? search,
+    TransactionType? type,
+  }) {
+    final query = select(transactions)
+      ..orderBy([
+        (t) => OrderingTerm.desc(t.occurredAt),
+        (t) => OrderingTerm.desc(t.createdAt),
+      ])
+      ..limit(limit, offset: offset);
+    for (final filter in _contextFilters(search: search, type: type)) {
+      query.where((_) => filter);
+    }
+    return query.map((row) => row.id).get();
+  }
+
+  /// Shared search + type predicates for the full-list windowed queries.
+  List<Expression<bool>> _contextFilters({
+    String? search,
+    TransactionType? type,
+  }) {
+    final filters = <Expression<bool>>[];
+    if (type != null) {
+      filters.add(transactions.type.equalsValue(type));
+    }
+    final term = search?.trim();
+    if (term == null || term.isEmpty) return filters;
+    final pattern = '%$term%';
+    final nameMatch = existsQuery(
+      select(ledgerEntries).join([
+        innerJoin(accounts, accounts.id.equalsExp(ledgerEntries.accountId)),
+      ])
+        ..where(ledgerEntries.transactionId.equalsExp(transactions.id))
+        ..where(accounts.name.like(pattern)),
+    );
+    filters.add(
+      transactions.merchant.like(pattern) |
+          transactions.note.like(pattern) |
+          nameMatch,
+    );
+    return filters;
   }
 
   /// First instant *after* each of the last [months] calendar months.

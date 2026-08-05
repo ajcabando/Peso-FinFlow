@@ -15,6 +15,8 @@ import '../../../accounts/domain/repositories/account_repository.dart';
 import '../../../accounts/presentation/providers/account_providers.dart';
 import '../../../accounts/presentation/widgets/account_card.dart';
 import '../../../accounts/presentation/widgets/account_card_grid.dart';
+import '../../../bills/presentation/providers/bill_providers.dart';
+import '../../../bills/presentation/widgets/bill_tile.dart';
 import '../../../budgets/presentation/providers/budget_providers.dart';
 import '../../../budgets/presentation/widgets/budget_progress_tile.dart';
 import '../../../transactions/presentation/providers/transaction_providers.dart';
@@ -39,6 +41,7 @@ class DashboardPage extends ConsumerWidget {
     final currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
     final spendAsync = ref.watch(categorySpendProvider(currentMonth));
     final budgetAsync = ref.watch(budgetProgressProvider(currentMonth));
+    final billsAsync = ref.watch(billsProvider);
 
     // Current-month income/expense for the hero stats row.
     final currentFlow = cashFlowAsync.value
@@ -87,10 +90,9 @@ class DashboardPage extends ConsumerWidget {
             onPressed: () => context.go(AppRoutes.transactions),
           ),
           IconButton(
-            tooltip: 'Notifications',
+            tooltip: 'Bills & reminders',
             icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () =>
-                context.showSnack('Notifications are coming soon.'),
+            onPressed: () => context.push(AppRoutes.bills),
           ),
           IconButton(
             tooltip: 'Analytics',
@@ -281,6 +283,92 @@ class DashboardPage extends ConsumerWidget {
                           compact: true,
                         ),
                       ],
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            SectionHeader(
+              title: 'Bills & reminders',
+              actionLabel: 'View all',
+              onAction: () => context.push(AppRoutes.bills),
+            ),
+            billsAsync.when(
+              loading: () => const SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (error, _) =>
+                  AppCard(child: Text('Could not load bills: $error')),
+              data: (bills) {
+                final attention = bills
+                    .where((b) => b.needsAttention)
+                    .toList();
+                if (attention.isEmpty) {
+                  return AppCard(
+                    onTap: () => context.push(AppRoutes.bills),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: context.colors.primary.withValues(
+                              alpha: 0.14,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            Icons.event_repeat_outlined,
+                            color: context.colors.primary,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Text(
+                            'No bills due — add a recurring bill',
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded),
+                      ],
+                    ),
+                  );
+                }
+                return AppCard(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.xs,
+                  ),
+                  child: Column(
+                    children: [
+                      for (final (index, bill)
+                          in attention.take(3).toList().indexed) ...[
+                        if (index > 0) const Divider(height: 1),
+                        BillTile(
+                          bill: bill,
+                          currencyCode: bill.currencyCode,
+                          compact: true,
+                          onTap: () => context.push(AppRoutes.bills),
+                        ),
+                      ],
+                      if (attention.length > 3)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.sm,
+                          ),
+                          child: Text(
+                            '+${attention.length - 3} more need attention',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: context.colors.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
                     ],
                   ),
                 );

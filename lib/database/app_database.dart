@@ -7,6 +7,7 @@ import '../features/transactions/domain/enums/ledger_direction.dart';
 import '../features/transactions/domain/enums/transaction_type.dart';
 import 'converters/enum_converters.dart';
 import 'daos/account_dao.dart';
+import 'daos/bill_dao.dart';
 import 'daos/budget_dao.dart';
 import 'daos/ledger_dao.dart';
 import 'daos/settings_dao.dart';
@@ -15,6 +16,7 @@ import 'seed/database_seeder.dart';
 import 'tables/accounts_table.dart';
 import 'tables/app_settings_table.dart';
 import 'tables/attachments_table.dart';
+import 'tables/bills_table.dart';
 import 'tables/budgets_table.dart';
 import 'tables/ledger_entries_table.dart';
 import 'tables/tags_table.dart';
@@ -38,16 +40,17 @@ part 'app_database.g.dart';
     Attachments,
     AppSettings,
     Budgets,
+    Bills,
   ],
-  daos: [AccountDao, BudgetDao, LedgerDao, TransactionDao, SettingsDao],
+  daos: [AccountDao, BillDao, BudgetDao, LedgerDao, TransactionDao, SettingsDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
-  /// Schema 2 adds the `budgets` table (Phase 7). Existing data is preserved
+  /// Schema 3 adds the `bills` table (Phase 8). Existing data is preserved
   /// through the [migration] step callback.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -68,6 +71,9 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.createTable(budgets);
+      }
+      if (from < 3) {
+        await m.createTable(bills);
       }
     },
     beforeOpen: (details) async {

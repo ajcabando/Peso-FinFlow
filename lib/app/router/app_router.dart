@@ -4,10 +4,13 @@ import 'package:go_router/go_router.dart';
 import '../../features/accounts/presentation/pages/account_detail_page.dart';
 import '../../features/accounts/presentation/pages/account_form_page.dart';
 import '../../features/accounts/presentation/pages/accounts_page.dart';
+import '../../features/bills/presentation/pages/bill_form_page.dart';
+import '../../features/bills/presentation/pages/bills_page.dart';
 import '../../features/budgets/presentation/pages/budget_form_page.dart';
 import '../../features/budgets/presentation/pages/budgets_page.dart';
 import '../../features/dashboard/presentation/pages/analytics_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
+import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/transactions/domain/enums/transaction_type.dart';
 import '../../features/transactions/presentation/pages/transaction_detail_page.dart';
@@ -22,8 +25,11 @@ abstract final class AppRoutes {
   static const String settings = '/settings';
   static const String accountForm = '/accounts/new';
   static const String analytics = '/analytics';
+  static const String reports = '/reports';
   static const String budgets = '/budgets';
   static const String budgetForm = '/budgets/new';
+  static const String bills = '/bills';
+  static const String billForm = '/bills/new';
   static const String transactions = '/transactions';
   static const String transactionForm = '/transactions/new';
 
@@ -43,6 +49,9 @@ abstract final class AppRoutes {
 
   /// Edit page for [budgetId].
   static String budgetEdit(String budgetId) => '/budgets/$budgetId/edit';
+
+  /// Edit page for [billId].
+  static String billEdit(String billId) => '/bills/$billId/edit';
 }
 
 /// Application navigation tree.
@@ -167,6 +176,29 @@ final appRouter = GoRouter(
               BudgetFormPage(budgetId: state.pathParameters['id']),
         ),
       ],
+    ),
+    GoRoute(
+      path: AppRoutes.bills,
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const BillsPage(),
+      routes: [
+        GoRoute(
+          path: 'new',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) => const BillFormPage(),
+        ),
+        GoRoute(
+          path: ':id/edit',
+          parentNavigatorKey: _rootNavigatorKey,
+          builder: (context, state) =>
+              BillFormPage(billId: state.pathParameters['id']),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: AppRoutes.reports,
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const ReportsPage(),
     ),
   ],
 );

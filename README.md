@@ -8,7 +8,7 @@
 
 ## Status
 
-**Foundation (Phases 1–3) + account management (Phase 4) + transaction UI (Phase 5) + dashboard & analytics (Phase 6) + budgets (Phase 7) complete.**
+**Phases 1–11 and 14–15 complete.** Phases 12 (AI insights) and 13 (cloud sync) are intentionally deferred — AI needs a provider key and cloud sync is local-first by design.
 
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
@@ -19,9 +19,16 @@
 | 5 | Transaction engine UI: expense/income/transfer/refund entry, full list with search & filters | ✅ |
 | 6 | Dashboard & analytics: category spend (donut + ranked list), net worth history, analytics page with month picker | ✅ |
 | 7 | Budgets & goals: monthly per-category budgets with ledger-derived progress, budgets page + dashboard overview | ✅ |
-| 8–15 | Bills & reminders, reports, backup, security, AI, cloud sync | ⏳ Next phases |
+| 8 | Bills & reminders: recurring bills with due-day tracking, one-tap "mark paid", dashboard due card | ✅ |
+| 9 | Reports & exports: month reports with CSV + PDF export | ✅ |
+| 10 | Backup & restore: portable full-database JSON snapshot (web + native) | ✅ |
+| 11 | Security: 4–8 digit PIN lock, biometric unlock (native), auto-lock | ✅ |
+| 12 | AI insights | ⏳ deferred (needs a provider key) |
+| 13 | Optional cloud sync | ⏳ deferred (local-first by design) |
+| 14 | Performance: windowed/paginated transaction list + 50k-row stress harness | ✅ |
+| 15 | Release hardening: analyzer clean, 177 tests, web release build | ✅ |
 
-Validation: `flutter analyze` clean · **101 tests passing** (unit + integration + widget) · web build compiles.
+Validation: `flutter analyze` clean · **177 tests passing** (unit + repository + widget + stress) · web release build compiles.
 
 ---
 
@@ -99,20 +106,21 @@ never be double-counted.
 - **Budgets** — monthly limit per expense category with progress tracked straight from the ledger (refunds included); budgets page with month picker, budgeted/spent/left summary, over-budget highlighting, plus a dashboard overview with the top at-risk budgets.
 - **Transactions** — add expense / income / transfer / refund with date & time pickers, accounts, categories, merchant and notes; full transaction list with instant search and type filters.
 - **Accounts** — create (cash, bank, debit/credit card, e-wallet, PayPal, crypto, investment, loan) with opening balances recorded as balanced ledger transactions; detail page with balance, info, per-account activity, edit / archive / delete (guarded).
-- **Settings** — theme (system/light/dark, persisted), default currency.
-- **Data model ready** — transactions, ledger, tags, attachments, settings tables with the full double-entry plumbing (validation, atomic writes, reactive streams, semantic type rules).
+- **Bills & reminders** — recurring bills (rent, subscriptions…) with due-day tracking, "due soon / overdue / paid" states, one-tap mark-paid, and a dashboard card for what needs attention.
+- **Reports** — month reports with income/expense/net summary, category breakdown and the full transaction list, exportable as CSV or a styled PDF statement.
+- **Backup & restore** — export the entire database (accounts, transactions, ledger, budgets, bills, settings) as one portable JSON file and restore it later; works identically on web and native.
+- **Security** — optional 4–8 digit PIN lock (salted SHA-256, never stored in plaintext), Touch ID / Face ID unlock on native, auto-lock on background, and a lock-now action.
+- **Settings** — theme (system/light/dark, persisted), default currency, category manager, security, backup.
+- **Performance** — the transaction list loads in fixed windows with database-level search and type filters, so 50k+ histories stay responsive (covered by a stress harness).
+- **Data model ready** — transactions, ledger, tags, attachments, settings, budgets and bills tables with the full double-entry plumbing (validation, atomic writes, reactive streams, semantic type rules).
 
 ## Roadmap (from the master plan)
 
-4. Account management (edit, archive, icons, balance history)
-5. Transaction engine UI (income/expense/transfer/refund entry)
-6. Dashboard & analytics (charts: cash flow, net worth, category spend)
-7. Budgets & goals
-8. Bills & reminders
-9. Reports & exports (PDF/Excel/CSV)
-10. Backup & restore
-11. Security (PIN, biometrics, encryption)
-12. AI insights
-13. Optional cloud sync
-14. Performance (million-transaction stress)
-15. Release hardening
+- **8. Bills & reminders** — ✅ recurring bills with due-day tracking and mark-paid
+- **9. Reports & exports** — ✅ month reports + CSV/PDF export
+- **10. Backup & restore** — ✅ portable JSON snapshot
+- **11. Security** — ✅ PIN + biometrics (device-level at-rest encryption remains a future hardening item)
+- **12. AI insights** — ⏳ next: rule-based insights first, then an AI provider once a key is available
+- **13. Optional cloud sync** — ⏳ planned path: Supabase + email/password, offline-first via `drift_supabase` (or the drift sync API), with a Local/Cloud toggle defaulting to Local
+- **14. Performance** — ✅ windowed list + 50k stress harness
+- **15. Release hardening** — ✅ analyzer clean, 177 tests, web release build

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../app/providers/app_providers.dart';
+import '../../../../app/router/app_router.dart';
 import '../../../../core/extensions/date_time_extensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_card.dart';
@@ -37,7 +39,16 @@ class _AnalyticsPageState extends ConsumerState<AnalyticsPage> {
     final spendAsync = ref.watch(categorySpendProvider(_month));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Analytics')),
+      appBar: AppBar(
+        title: const Text('Analytics'),
+        actions: [
+          IconButton(
+            tooltip: 'Reports & exports',
+            icon: const Icon(Icons.description_outlined),
+            onPressed: () => context.push(AppRoutes.reports),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [

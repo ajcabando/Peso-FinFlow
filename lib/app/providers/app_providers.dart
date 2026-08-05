@@ -7,6 +7,8 @@ import '../../database/app_database.dart';
 import '../../database/database_connection.dart';
 import '../../features/accounts/data/repositories/account_repository_impl.dart';
 import '../../features/accounts/domain/repositories/account_repository.dart';
+import '../../features/bills/data/repositories/bill_repository_impl.dart';
+import '../../features/bills/domain/repositories/bill_repository.dart';
 import '../../features/budgets/data/repositories/budget_repository_impl.dart';
 import '../../features/budgets/domain/repositories/budget_repository.dart';
 import '../../features/transactions/data/repositories/transaction_repository_impl.dart';
@@ -17,6 +19,11 @@ abstract final class SettingsKeys {
   static const String themeMode = 'settings.themeMode';
   static const String currency = 'settings.currency';
   static const String palette = 'settings.palette';
+
+  // Security (Phase 11): salted PIN hash + preferences.
+  static const String securityPin = 'security.pinHash';
+  static const String securityBiometrics = 'security.biometrics';
+  static const String securityAutoLock = 'security.autoLock';
 }
 
 /// The single application-wide database instance.
@@ -41,6 +48,10 @@ final accountRepositoryProvider = Provider<AccountRepository>(
 
 final budgetRepositoryProvider = Provider<BudgetRepository>(
   (ref) => BudgetRepositoryImpl(db: ref.watch(databaseProvider)),
+);
+
+final billRepositoryProvider = Provider<BillRepository>(
+  (ref) => BillRepositoryImpl(db: ref.watch(databaseProvider)),
 );
 
 final settingsDaoProvider = Provider(

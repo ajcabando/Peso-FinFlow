@@ -5,6 +5,8 @@ import 'package:finflow/features/accounts/domain/enums/account_kind.dart';
 import 'package:finflow/features/accounts/domain/models/account.dart';
 import 'package:finflow/features/accounts/domain/repositories/account_repository.dart';
 import 'package:finflow/features/accounts/presentation/providers/account_providers.dart';
+import 'package:finflow/features/bills/domain/models/bill.dart';
+import 'package:finflow/features/bills/presentation/providers/bill_providers.dart';
 import 'package:finflow/features/budgets/domain/models/budget.dart';
 import 'package:finflow/features/budgets/domain/models/budget_progress.dart';
 import 'package:finflow/features/budgets/presentation/providers/budget_providers.dart';
@@ -50,6 +52,7 @@ Widget pumpApp(
   required Widget child,
   List<Account>? accounts,
   List<Account>? categories,
+  List<Bill>? bills,
   List<AccountWithBalance>? accountsWithBalances,
   List<TransactionContext>? recentContexts,
   List<MonthlyCashFlow>? cashFlow,
@@ -96,6 +99,10 @@ Widget pumpApp(
         ),
       if (budgets != null)
         budgetsProvider.overrideWith((ref) => Stream.value(budgets)),
+      // The dashboard watches the bills stream; always override it so widget
+      // tests never subscribe to a real drift watch (drift's zero-duration
+      // watch timers fail under the fake-async pending-timer check).
+      billsProvider.overrideWith((ref) => Stream.value(bills ?? const [])),
       if (budgetProgress != null)
         budgetProgressProvider.overrideWith(
           (ref, month) => Future.value(budgetProgress),

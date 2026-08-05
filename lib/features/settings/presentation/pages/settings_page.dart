@@ -1,3 +1,5 @@
+import 'package:file_saver/file_saver.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,12 +12,20 @@ import '../../../../core/theme/app_radii.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../shared/widgets/app_card.dart';
+import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/section_header.dart';
 import '../../../accounts/domain/enums/account_type.dart';
 import '../../../accounts/domain/models/account.dart';
 import '../../../accounts/presentation/providers/account_providers.dart';
 import '../../../accounts/presentation/widgets/account_type_ui.dart';
 import '../../../accounts/presentation/widgets/category_form_sheet.dart';
+import '../../../backup/data/backup_service.dart';
+import '../../../bills/presentation/providers/bill_providers.dart';
+import '../../../budgets/presentation/providers/budget_providers.dart';
+import '../../../security/data/biometric_service.dart';
+import '../../../security/presentation/providers/security_providers.dart';
+import '../../../security/presentation/widgets/pin_setup_sheet.dart';
+import '../../../transactions/presentation/providers/transaction_providers.dart';
 
 /// Appearance, currency and about — the foundation settings.
 class SettingsPage extends ConsumerWidget {
@@ -128,6 +138,12 @@ class SettingsPage extends ConsumerWidget {
           const SectionHeader(title: 'Categories'),
           const _CategoriesCard(),
           const SizedBox(height: AppSpacing.xl),
+          const SectionHeader(title: 'Security'),
+          const _SecurityCard(),
+          const SizedBox(height: AppSpacing.xl),
+          const SectionHeader(title: 'Backup & restore'),
+          const _BackupCard(),
+          const SizedBox(height: AppSpacing.xl),
           const SectionHeader(title: 'Privacy'),
           AppCard(
             child: Row(
@@ -149,8 +165,8 @@ class SettingsPage extends ConsumerWidget {
                       Text(
                         'All data stays in a private on-device database. '
                         'Nothing leaves your device unless you choose to '
-                        'sync or export. Device-level encryption ships with '
-                        'the Security phase.',
+                        'sync or export. Lock the app with a PIN and '
+                        'biometrics from the Security section above.',
                         style: context.textTheme.bodySmall?.copyWith(
                           color: context.colors.onSurfaceVariant,
                           height: 1.4,
@@ -389,6 +405,340 @@ class _ProfileHeader extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// PIN lock, biometrics and auto-lock controls.
+class _SecurityCard extends ConsumerWidget {
+  const _SecurityCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final security = ref.watch(securityControllerProvider);
+    final controller = ref.read(securityControllerProvider.notifier);
+
+    Future<void> setPin() => showPinSetupSheet(context);
+
+    Future<void> removePin() async {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Remove PIN lock?'),
+          content: const Text(
+            'FinFlow will no longer ask for a PIN to open.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      await controller.removePin();
+      if (context.mounted) context.showSnack('PIN lock removed');
+    }
+
+    Future<void> toggleBiometrics(bool enabled) async {
+      if (enabled && !await BiometricService.isAvailable()) {
+        if (context.mounted) {
+          context.showSnack(
+            'Biometrics are not available on this device or platform.',
+          );
+        }
+        return;
+      }
+      await controller.setBiometricsEnabled(enabled);
+    }
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: context.colors.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(
+                  Icons.lock_outline_rounded,
+                  color: context.colors.primary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      security.hasPin ? 'PIN lock enabled' : 'Protect the app',
+                      style: context.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      security.hasPin
+                          ? 'FinFlow asks for your PIN on launch.'
+                          : 'Set a PIN to lock FinFlow on this device.',
+                      style: context.textTheme.bodySmall?.copyWith(
+                        color: context.colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (!security.hasPin)
+            AppButton(
+              label: 'Set PIN',
+              icon: Icons.pin_outlined,
+              onPressed: setPin,
+            )
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: 'Change PIN',
+                    icon: Icons.pin_outlined,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: setPin,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: AppButton(
+                    label: 'Remove',
+                    variant: AppButtonVariant.secondary,
+                    onPressed: removePin,
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: AppSpacing.xl),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.fingerprint_rounded),
+              title: const Text('Unlock with biometrics'),
+              subtitle: const Text(
+                'Touch ID / Face ID where available (not on web).',
+              ),
+              value: security.biometricsEnabled,
+              onChanged: toggleBiometrics,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.bedtime_outlined),
+              title: const Text('Auto-lock on background'),
+              subtitle: const Text(
+                'Re-lock when the app is sent to the background.',
+              ),
+              value: security.autoLockEnabled,
+              onChanged: (enabled) => controller.setAutoLock(enabled),
+            ),
+            TextButton.icon(
+              onPressed: controller.lock,
+              icon: const Icon(Icons.lock_rounded, size: 18),
+              label: const Text('Lock now'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Export / import the entire database as a portable backup file.
+class _BackupCard extends ConsumerStatefulWidget {
+  const _BackupCard();
+
+  @override
+  ConsumerState<_BackupCard> createState() => _BackupCardState();
+}
+
+class _BackupCardState extends ConsumerState<_BackupCard> {
+  bool _exporting = false;
+  bool _importing = false;
+
+  BackupService get _service => BackupService(db: ref.read(databaseProvider));
+
+  void _refreshAfterRestore() {
+    // Import writes through the same connection, so reactive streams refresh
+    // on their own — invalidate the one-shot future providers too.
+    ref.invalidate(netWorthProvider);
+    ref.invalidate(netWorthTrendProvider);
+    ref.invalidate(monthlyCashFlowProvider);
+    ref.invalidate(accountsWithBalancesProvider);
+    ref.invalidate(recentTransactionContextsProvider);
+    ref.invalidate(allTransactionContextsProvider);
+    ref.invalidate(allTransactionsProvider);
+    ref.invalidate(categorySpendProvider);
+    ref.invalidate(budgetProgressProvider);
+    ref.invalidate(billsProvider);
+  }
+
+  Future<void> _export() async {
+    setState(() => _exporting = true);
+    try {
+      final bytes = await _service.exportBackup();
+      final stamp = DateTime.now();
+      final name =
+          'finflow-backup-${stamp.year}-'
+          '${stamp.month.toString().padLeft(2, '0')}-'
+          '${stamp.day.toString().padLeft(2, '0')}';
+      await FileSaver.instance.saveFile(
+        name: name,
+        bytes: bytes,
+        fileExtension: 'finflow',
+        mimeType: MimeType.json,
+      );
+      if (mounted) context.showSnack('Backup downloaded');
+    } on Exception {
+      if (mounted) context.showSnack('Could not create the backup.');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _restore() async {
+    const typeGroup = XTypeGroup(
+      label: 'FinFlow backup',
+      extensions: ['finflow', 'json'],
+    );
+    final file = await openFile(acceptedTypeGroups: const [typeGroup]);
+    if (!mounted) return;
+    if (file == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restore backup?'),
+        content: const Text(
+          'This replaces ALL current data on this device with the backup. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _importing = true);
+    try {
+      final bytes = await file.readAsBytes();
+      await _service.importBackup(bytes);
+      _refreshAfterRestore();
+      if (mounted) context.showSnack('Backup restored');
+    } on Exception {
+      if (mounted) {
+        context.showSnack(
+          'Could not restore — the file may not be a FinFlow backup.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: context.colors.tertiary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(
+                  Icons.cloud_download_outlined,
+                  color: context.colors.tertiary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Full database snapshot',
+                      style: context.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Accounts, transactions, budgets, bills and settings '
+                      'in one portable file.',
+                      style: context.textTheme.bodySmall?.copyWith(
+                        color: context.colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  label: 'Export backup',
+                  icon: Icons.download_rounded,
+                  variant: AppButtonVariant.secondary,
+                  loading: _exporting,
+                  onPressed: _export,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  label: 'Restore',
+                  icon: Icons.upload_rounded,
+                  variant: AppButtonVariant.secondary,
+                  loading: _importing,
+                  onPressed: _restore,
+                ),
+              ),
+            ],
           ),
         ],
       ),

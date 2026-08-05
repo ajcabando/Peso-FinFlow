@@ -1,3 +1,4 @@
+import '../enums/transaction_type.dart';
 import '../models/balance_point.dart';
 import '../models/category_spend.dart';
 import '../models/draft_transaction.dart';
@@ -28,6 +29,25 @@ abstract interface class TransactionRepository {
   Stream<List<TransactionContext>> watchForAccountContext(String accountId);
 
   Future<TransactionContext?> getContextById(String id);
+
+  /// Enriched transactions within the half-open range `[from, to)`, newest
+  /// first (used by the reports page and exports).
+  Future<List<TransactionContext>> contextsBetween({
+    required DateTime from,
+    required DateTime to,
+  });
+
+  /// Windowed, filtered page of enriched transactions (full list screen).
+  Future<List<TransactionContext>> contextPage({
+    required int limit,
+    required int offset,
+    String? search,
+    TransactionType? type,
+  });
+
+  /// Reactive count of transactions matching [search]/[type] (same filters
+  /// as [contextPage]) — drives the list's refresh-on-write.
+  Stream<int> watchContextCount({String? search, TransactionType? type});
 
   /// Monthly income vs expense, oldest first, for the last [months] months.
   Future<List<MonthlyCashFlow>> monthlyCashFlow({int months});

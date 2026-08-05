@@ -51,7 +51,7 @@ The web target ships a SQLite WASM build (`web/sqlite3.wasm` + `web/drift_worker
 
 ### Release artifacts
 
-Android APK (`dist/FinFlow-v0.1.0.apk`), macOS DMG and iOS builds are covered in [`docs/BUILDING.md`](docs/BUILDING.md). The Android toolchain is installed on this machine; macOS/iOS need Xcode (install steps in the guide).
+Android APK (`dist/FinFlow-v0.1.0.apk`), macOS DMG, the **signed iOS IPA** (`dist/FinFlow-signed.ipa` — development-signed for devices registered to team `25FHU3ZF38`) and the unsigned iOS build are covered in [`docs/BUILDING.md`](docs/BUILDING.md). All are attached to the [v0.1.0 GitHub release](https://github.com/ajcabando/FinFlow/releases/tag/v0.1.0). The Android toolchain is installed on this machine; macOS/iOS need Xcode (install steps in the guide).
 
 ---
 

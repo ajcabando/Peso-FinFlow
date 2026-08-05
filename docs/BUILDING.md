@@ -9,7 +9,7 @@ This guide covers producing installable artifacts for every platform.
 | Web | Flutter only | ✅ `flutter build web` |
 | Android | JDK 21 (Homebrew) + Android SDK 36 at `~/Library/Android/sdk` | ✅ APK builds |
 | macOS (DMG) | Xcode 26.6 at `/Volumes/DATA/Applications/Xcode.app` + CocoaPods 1.17 | ✅ DMG builds |
-| iOS (app/IPA) | Xcode 26.6 + iOS 26.5 SDK | ✅ unsigned; signed via free Apple ID script |
+| iOS (app/IPA) | Xcode 26.6 + iOS 26.5 SDK | ✅ signed IPA (team 25FHU3ZF38, Individual) |
 
 **Gotcha — Xcode lives on the DATA volume.** The machine's active developer directory must be pointed at it once (this was the whole battle):
 
@@ -50,13 +50,25 @@ A copy with a versioned name lives at `dist/FinFlow-v0.1.0.apk` (signed, verifie
 >
 > **⚠️ Back up the keystore + password.** Updates to any installed app must be signed
 > with the *same* key — losing `finflow-release.jks` or its password means you can never
-> update the app (or publish to Play Store) again. Store a copy somewhere safe
-> (password manager + offline backup), e.g.:
+> update the app (or publish to Play Store) again.
+>
+> **Re-back up before every release.** Whenever the keystore changes — or just before
+> cutting a new release — refresh the backup so it always matches the live keystore:
 >
 > ```bash
+> mkdir -p ~/Backups
 > cp android/app/finflow-release.jks ~/Backups/finflow-release.jks
-> # plus note the passwords from android/key.properties
+> cp android/key.properties ~/Backups/finflow-release-key.properties
+> chmod 600 ~/Backups/finflow-release.jks ~/Backups/finflow-release-key.properties
+>
+> # Verify the copies are byte-identical (the two checksums per file must match):
+> shasum -a 256 android/app/finflow-release.jks ~/Backups/finflow-release.jks
+> shasum -a 256 android/key.properties ~/Backups/finflow-release-key.properties
+> # …and store the password in a password manager.
 > ```
+>
+> ✅ Done for the v0.1.0 keystore — a verified copy already lives in `~/Backups/`.
+> If you ever re-create or rotate the keystore, repeat this step before releasing.
 >
 > For Play Store, use Play App Signing (Google holds the upload key; you keep a separate
 > upload key).
@@ -149,7 +161,8 @@ xcrun devicectl device install app --device <UDID> dist/FinFlow-signed.ipa
 Then on the phone: **Settings → General → VPN & Device Management → trust your Apple ID**
 the first time.
 
-> **⚠️ Free-account constraints**
+> **⚠️ Free-account constraints** (this machine's team is **paid Individual**, so the
+> 7-day caveat below does *not* apply — the dev profile lasts a year)
 > - The development provisioning profile **expires after 7 days** — re-run
 >   `scripts/build_signed_ipa.sh` to re-sign whenever the app stops launching.
 > - Free teams get **no push notifications, iCloud, App Groups, etc.** — FinFlow doesn't
@@ -159,10 +172,12 @@ the first time.
 >   with identifier 'com.finflow.finflow' is not available"*, switch it to a unique id
 >   (e.g. `com.ajcabando.finflow`) in the three Runner configs of `project.pbxproj`.
 
-> **Status:** unsigned `dist/FinFlow-v0.1.0.ipa` already built and validated. The app is
-> **universal**: `UIDeviceFamily = [1, 2]` so the same artifact runs on both **iPhone and
-> iPad** (iPadOS needs no separate build). The signed build requires the Apple ID
-> prerequisites above (an account present in Xcode + a registered device).
+> **Status:** ✅ **`dist/FinFlow-signed.ipa`** (signed, ~10 MB) built 2026-08-06 with the
+> paid **Individual** team **25FHU3ZF38** ("Alain Cabando") via automatic signing; device UDID
+> `00008110-0019042E343A801E` is registered on the team. Verified with `codesign`
+> (Identifier `com.finflow.finflow`, TeamIdentifier `25FHU3ZF38`). The unsigned
+> `dist/FinFlow-v0.1.0.ipa` remains for CI/smoke testing. The app is **universal**
+> (`UIDeviceFamily = [1, 2]`) so one artifact runs on both **iPhone and iPad**.
 
 If you only need to smoke-test on a simulator:
 

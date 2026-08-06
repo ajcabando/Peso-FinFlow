@@ -55,13 +55,13 @@ const List<QuickAction> quickActions = [
     type: TransactionType.expense,
   ),
   QuickAction(
-    label: 'Credit Card Purchase',
+    label: 'Card Purchase',
     icon: Icons.credit_card_rounded,
     color: AppColors.pink,
     type: TransactionType.expense,
   ),
   QuickAction(
-    label: 'Credit Card Payment',
+    label: 'Card Payment',
     icon: Icons.payment_rounded,
     color: AppColors.brand,
     type: TransactionType.transfer,
@@ -82,6 +82,10 @@ const List<QuickAction> quickActions = [
 
 /// Modal bottom sheet listing the quick actions; each opens the transaction
 /// form with the matching type pre-selected.
+///
+/// Kept deliberately compact so it never swallows a phone screen: small
+/// icon tiles with single-line labels, a three-column grid (five on wide
+/// screens) and a scroll wrapper as a safety net for very short viewports.
 class QuickActionsSheet extends StatelessWidget {
   const QuickActionsSheet({super.key});
 
@@ -98,75 +102,87 @@ class QuickActionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Quick actions',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Record a transaction in a tap',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 3,
-              mainAxisSpacing: AppSpacing.md,
-              crossAxisSpacing: AppSpacing.md,
-              childAspectRatio: 0.95,
-              children: [
-                for (final action in quickActions)
-                  _QuickActionButton(
-                    action: action,
-                    onTap: () => _open(context, action),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const Divider(height: 1),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: _ShortcutTile(
-                    icon: Icons.event_repeat_outlined,
-                    label: 'Bills',
-                    color: AppColors.warning,
-                    onTap: () {
-                      final router = GoRouter.of(context);
-                      Navigator.of(context).pop();
-                      router.push(AppRoutes.bills);
-                    },
-                  ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Quick actions',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: _ShortcutTile(
-                    icon: Icons.description_outlined,
-                    label: 'Reports',
-                    color: AppColors.info,
-                    onTap: () {
-                      final router = GoRouter.of(context);
-                      Navigator.of(context).pop();
-                      router.push(AppRoutes.reports);
-                    },
-                  ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                'Record a transaction in a tap',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  // Three columns on phones, five across on tablets/web so
+                  // the grid never stretches into oversized cells.
+                  final columns = constraints.maxWidth >= 600 ? 5 : 3;
+                  return GridView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisSpacing: AppSpacing.sm,
+                      crossAxisSpacing: AppSpacing.sm,
+                      mainAxisExtent: 68,
+                    ),
+                    children: [
+                      for (final action in quickActions)
+                        _QuickActionButton(
+                          action: action,
+                          onTap: () => _open(context, action),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ShortcutTile(
+                      icon: Icons.event_repeat_outlined,
+                      label: 'Bills',
+                      color: AppColors.warning,
+                      onTap: () {
+                        final router = GoRouter.of(context);
+                        Navigator.of(context).pop();
+                        router.push(AppRoutes.bills);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: _ShortcutTile(
+                      icon: Icons.description_outlined,
+                      label: 'Reports',
+                      color: AppColors.info,
+                      onTap: () {
+                        final router = GoRouter.of(context);
+                        Navigator.of(context).pop();
+                        router.push(AppRoutes.reports);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -198,7 +214,7 @@ class _ShortcutTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
-            vertical: AppSpacing.md,
+            vertical: AppSpacing.sm,
           ),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.10),
@@ -206,14 +222,19 @@ class _ShortcutTile extends StatelessWidget {
             border: Border.all(color: color.withValues(alpha: 0.25)),
           ),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color, size: 20),
+              Icon(icon, color: color, size: 18),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: color,
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
                 ),
               ),
             ],
@@ -240,38 +261,49 @@ class _QuickActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadii.lg),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    action.color.withValues(alpha: 0.85),
-                    action.color.withValues(alpha: 0.65),
+            Center(
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      action.color.withValues(alpha: 0.85),
+                      action.color.withValues(alpha: 0.65),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  boxShadow: [
+                    BoxShadow(
+                      color: action.color.withValues(alpha: 0.30),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: action.color.withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+                child: Icon(action.icon, color: Colors.white, size: 20),
               ),
-              child: Icon(action.icon, color: Colors.white, size: 24),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              action.label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
+            const SizedBox(height: 6),
+            // Flexible + FittedBox keeps the fixed tile height safe at large
+            // accessibility text scales: the label shrinks instead of
+            // overflowing the cell.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  action.label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ],

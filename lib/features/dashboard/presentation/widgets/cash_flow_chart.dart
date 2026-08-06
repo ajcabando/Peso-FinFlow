@@ -80,7 +80,9 @@ class _CashFlowChartState extends State<CashFlowChart> {
       child: SizedBox(
         height: widget.height,
         child: BarChart(
-          duration: const Duration(milliseconds: 400),
+          // Implicit animations hang the first frame on web (and this
+          // machine's software-rendered simulators); render instantly.
+          duration: Duration.zero,
           curve: Curves.easeOutCubic,
           BarChartData(
             alignment: BarChartAlignment.spaceAround,

@@ -106,7 +106,9 @@ class _CategorySpendSectionState extends State<CategorySpendSection> {
                   alignment: Alignment.center,
                   children: [
                     PieChart(
-                      duration: const Duration(milliseconds: 500),
+                      // Implicit animations hang the first frame on web (and
+                      // this machine's software-rendered simulators).
+                      duration: Duration.zero,
                       curve: Curves.easeOutCubic,
                       PieChartData(
                         sectionsSpace: 2,
@@ -134,36 +136,45 @@ class _CategorySpendSectionState extends State<CategorySpendSection> {
                       ),
                     ),
                     // The centre shows the total by default and swaps to the
-                    // touched category's details on interaction.
-                    Padding(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _touched?.categoryName ?? 'TOTAL',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.1,
+                    // touched category's details on interaction. Content is
+                    // capped to the donut hole (radius 0.42 * 2) so long
+                    // names or amounts ellipsize instead of overlapping the
+                    // ring (a bare Column would size to its natural width
+                    // and bleed over the slices).
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: donutSize * 0.80,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _touched?.categoryName ?? 'TOTAL',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.1,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            CurrencyFormatter.format(
-                              _touched?.amountMinor ?? _total,
-                              widget.currencyCode,
+                            const SizedBox(height: 2),
+                            Text(
+                              CurrencyFormatter.format(
+                                _touched?.amountMinor ?? _total,
+                                widget.currencyCode,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],

@@ -88,27 +88,27 @@ Requires **Xcode** (see [Installing Xcode](#installing-xcode) below). Once insta
 ```bash
 # 1. Build the .app bundle
 flutter build macos --release
-# → build/macos/Build/Products/Release/FinFlow.app
+# → build/macos/Build/Products/Release/Peso-FinFlow.app
 
 # 2. Package a DMG. Two options:
 
 # Option A — quick, plain DMG (no drag-drop layout):
-hdiutil create -volname FinFlow -srcfolder \
-  build/macos/Build/Products/Release/FinFlow.app \
-  -ov -format UDZO dist/FinFlow-v0.1.0.dmg
+hdiutil create -volname "Peso-FinFlow v0.1.0" -srcfolder \
+  build/macos/Build/Products/Release/Peso-FinFlow.app \
+  -ov -format UDZO dist/Peso-FinFlow-v0.1.0.dmg
 
 # Option B — nice drag-drop install DMG with /Applications symlink:
 # (brew install --cask create-dmg first)
 create-dmg \
-  --volname "FinFlow v0.1.0" \
+  --volname "Peso-FinFlow v0.1.0" \
   --window-pos 200 120 --window-size 600 400 \
-  --icon-size 100 --icon "FinFlow.app" 175 190 \
-  --hide-extension "FinFlow.app" --app-drop-link 425 190 \
-  dist/FinFlow-v0.1.0.dmg \
-  build/macos/Build/Products/Release/FinFlow.app
+  --icon-size 100 --icon "Peso-FinFlow.app" 175 190 \
+  --hide-extension "Peso-FinFlow.app" --app-drop-link 425 190 \
+  dist/Peso-FinFlow-v0.1.0.dmg \
+  build/macos/Build/Products/Release/Peso-FinFlow.app
 ```
 
-> **Status:** built and validated — `dist/FinFlow-v0.1.0.dmg` (mounts, contains `finflow.app` + `/Applications` drag target).
+> **Status:** renamed to **Peso-FinFlow** to match the App Store listing — `dist/Peso-FinFlow-v0.1.0.dmg` (mounts, contains `Peso-FinFlow.app` + `/Applications` drag target).
 >
 > **Signing note:** `flutter build macos --release` ad-hoc signs. For distribution to other
 > Macs you need Developer ID signing + notarization (`xcrun notarytool submit`), which requires

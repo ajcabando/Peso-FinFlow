@@ -69,7 +69,9 @@ class NetWorthTrendChart extends StatelessWidget {
       child: SizedBox(
         height: height,
         child: LineChart(
-          duration: const Duration(milliseconds: 500),
+          // Implicit animations hang the first frame on web (and this
+          // machine's software-rendered simulators); render instantly.
+          duration: Duration.zero,
           curve: Curves.easeOutCubic,
           LineChartData(
             minX: 0,

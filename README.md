@@ -6,6 +6,19 @@
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="dist/screenshots/iphone-6.7-dashboard.png" width="22%" alt="Dashboard">
+  <img src="dist/screenshots/iphone-6.7-analytics.png" width="22%" alt="Analytics">
+  <img src="dist/screenshots/iphone-6.7-transactions.png" width="22%" alt="Transactions">
+  <img src="dist/screenshots/iphone-6.7-accounts.png" width="22%" alt="Accounts">
+</p>
+
+*Captured from the iOS simulator (iPhone 6.7″) with demo data. iPad 12.9″ versions of each screen live in [`dist/screenshots/`](dist/screenshots/).*
+
+---
+
 ## Status
 
 **Phases 1–11 and 14–15 complete.** Phases 12 (AI insights) and 13 (cloud sync) are intentionally deferred — AI needs a provider key and cloud sync is local-first by design.
@@ -28,7 +41,7 @@
 | 14 | Performance: windowed/paginated transaction list + 50k-row stress harness | ✅ |
 | 15 | Release hardening: analyzer clean, 177 tests, web release build | ✅ |
 
-Validation: `flutter analyze` clean · **177 tests passing** (unit + repository + widget + stress) · web release build compiles.
+Validation: `flutter analyze` clean · **180 tests passing** (unit + repository + widget + stress) · web release build compiles.
 
 ---
 
@@ -127,4 +140,4 @@ never be double-counted.
 - **12. AI insights** — ⏳ next: rule-based insights first, then an AI provider once a key is available
 - **13. Optional cloud sync** — ⏳ planned path: Supabase + email/password, offline-first via `drift_supabase` (or the drift sync API), with a Local/Cloud toggle defaulting to Local
 - **14. Performance** — ✅ windowed list + 50k stress harness
-- **15. Release hardening** — ✅ analyzer clean, 177 tests, web release build
+- **15. Release hardening** — ✅ analyzer clean, 180 tests, web release build

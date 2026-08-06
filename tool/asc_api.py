@@ -10,6 +10,7 @@ Usage:
     python3 tool/asc_api.py builds                  # list builds (newest first)
     python3 tool/asc_api.py builds --processing     # only PROCESSING builds
     python3 tool/asc_api.py detail <build_id>       # deep-dive: state, beta, encryption
+    python3 tool/asc_api.py betagroup <build_number>  # add build to 'Internal Testers'
     python3 tool/asc_api.py watch [build_number]    # poll until a build is VALID/INVALID/FAILED
 
 Everything can also live in ~/.config/finflow/asc.env (KEY=VALUE lines).
@@ -105,12 +106,79 @@ def _jwt(issuer: str, key_id: str, key_path: str) -> str:
     return f"{header}.{payload}.{_b64url(_sign(signing_input, key_path))}"
 
 
-def _request(token: str, path: str) -> dict:
+def _request(token: str, path: str, method: str = "GET", body=None) -> dict:
+    data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
-        f"{API}{path}", headers={"Authorization": f"Bearer {token}"}
+        f"{API}{path}",
+        method=method,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode())
+        raw = resp.read()
+        return json.loads(raw.decode()) if raw else {}
+
+
+def _cmd_betagroup(token: str, build_number: str, app_id: str) -> int:
+    """Create an internal 'Internal Testers' beta group (if missing) and add a
+    build to it by build number."""
+    if not app_id:
+        print("ASC_APP_ID is required for betagroup", file=sys.stderr)
+        return 2
+    # Find the target build's id by version (build number).
+    q = f"?limit=50&sort=-uploadedDate&filter[app]={urllib.parse.quote(app_id)}"
+    builds = _request(token, f"/v1/builds{q}").get("data", [])
+    target = next(
+        (b for b in builds if str(b.get("attributes", {}).get("version")) == str(build_number)),
+        None,
+    )
+    if not target:
+        print(f"  build {build_number} not found", file=sys.stderr)
+        return 1
+    build_id = target["id"]
+
+    # Find or create the internal group.
+    groups = _request(
+        token,
+        f"/v1/betaGroups?limit=200&filter[app]={urllib.parse.quote(app_id)}",
+    ).get("data", [])
+    group = next(
+        (g for g in groups if g.get("attributes", {}).get("name") == "Internal Testers"),
+        None,
+    )
+    if not group:
+        created = _request(
+            token,
+            "/v1/betaGroups",
+            method="POST",
+            body={
+                "data": {
+                    "type": "betaGroups",
+                    "attributes": {"name": "Internal Testers"},
+                    "relationships": {
+                        "app": {"data": {"type": "apps", "id": app_id}}
+                    },
+                }
+            },
+        )
+        group = created.get("data")
+        print(f"  created beta group: {group.get('id')} 'Internal Testers'")
+    else:
+        print(f"  using existing beta group: {group.get('id')} 'Internal Testers'")
+    gid = group["id"]
+
+    # Add the build to the group.
+    _request(
+        token,
+        f"/v1/betaGroups/{urllib.parse.quote(gid)}/relationships/builds",
+        method="POST",
+        body={"data": [{"type": "builds", "id": build_id}]},
+    )
+    print(f"  added build {build_number} ({build_id}) to 'Internal Testers'")
+    return 0
 
 
 def _fmt_build(b: dict) -> str:
@@ -229,6 +297,12 @@ def main() -> int:
                 print("usage: python3 tool/asc_api.py detail <build_id>", file=sys.stderr)
                 return 2
             return _cmd_detail(token, args[1], app_id)
+
+        if cmd == "betagroup":
+            if len(args) < 2:
+                print("usage: python3 tool/asc_api.py betagroup <build_number>", file=sys.stderr)
+                return 2
+            return _cmd_betagroup(token, args[1], app_id)
 
         if cmd == "watch":
             target = args[1] if len(args) > 1 else None

@@ -1,0 +1,105 @@
+# FinFlow self-hosted stack — postgres, minio, redis (optional), finflow-api.
+#
+# Topology (docs/SELF_HOSTED.md §3):
+#   - `finflow_net` is internal: PostgreSQL / MinIO / Redis are unreachable
+#     from outside Docker. Only finflow-api talks to them.
+#   - `finflow-api` joins `proxy`, the shared network with your host nginx
+#     reverse proxy. Compose creates it if missing and joins an existing
+#     network of the same name (override with PROXY_NETWORK in .env).
+#   - For Phase 1 verification the API is ALSO published on
+#     127.0.0.1:${API_PORT:-8080}; remove that `ports` block in production
+#     once nginx proxies to the container.
+#
+# Secrets live in two gitignored files:
+#   .env         → compose-level (POSTGRES_*, MINIO_ROOT_*, PROXY_NETWORK)
+#   server/.env  → app env for migrate + finflow-api (DATABASE_URL, …)
+# Both are templated by .env.example / server/.env.example.
+
+name: finflow
+
+networks:
+  finflow_net:
+    internal: true
+  proxy:
+    name: ${PROXY_NETWORK:-finflow_proxy}
+
+services:
+  # Applies pending Drizzle migrations, then exits. finflow-api waits for it.
+  migrate:
+    build: { context: ./server }
+    command: ["sh", "-c", "node dist/drizzle/migrate.js"]
+    env_file: ./server/.env
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [finflow_net]
+    restart: "no"
+
+  finflow-api:
+    build: { context: ./server }
+    restart: unless-stopped
+    env_file: ./server/.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    networks: [finflow_net, proxy]
+    ports:
+      # Phase 1 verification only — delete in production (nginx then reaches
+      # the container via the `proxy` network alone).
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-finflow}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [finflow_net]
+
+  minio:
+    # Pinned by digest — `latest` silently moves under a running stack.
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-finflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+    volumes: [minio-data:/data]
+    # `mc ready local` needs a preconfigured alias — use the image's built-in
+    # HTTP health endpoint (curl ships in the minio image).
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [finflow_net]
+
+  # Optional — used from Phase 8 (BullMQ jobs) and for the shared brute-force
+  # limiter. Auth is enabled when REDIS_PASSWORD is set (recommended even on
+  # the internal network); without it Redis runs unauthenticated but is still
+  # unreachable from outside Docker.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --appendonly yes $${REDIS_PASSWORD:+--requirepass \"$$REDIS_PASSWORD\"}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes: [redis-data:/data]
+    healthcheck:
+      # auth-enabled healthcheck: AUTH when a password is set, plain PING otherwise
+      test: ["CMD-SHELL", "$${REDIS_PASSWORD:+redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping} $${REDIS_PASSWORD:-redis-cli ping}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [finflow_net]
+
+volumes:
+  pgdata: {}
+  minio-data: {}
+  redis-data: {}

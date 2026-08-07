@@ -9,6 +9,12 @@ class AppSettings extends Table {
 
   TextColumn get value => text()();
 
+  /// When the value last changed (drives cloud sync deltas).
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+
+  /// Owning cloud user (null = local-only until adopted at sign-in).
+  TextColumn get userId => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {key};
 }

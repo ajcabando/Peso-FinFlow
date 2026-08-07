@@ -47,3 +47,10 @@ app.*.map.json
 # Release signing — never commit keystore or credentials
 /android/key.properties
 *.jks
+
+# FinFlow API (server/) — compose-level environment and build noise
+.env
+!.env.example
+/server/node_modules/
+/server/dist/
+/server/coverage/

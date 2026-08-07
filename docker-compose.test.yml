@@ -1,0 +1,28 @@
+# Test-only override — publishes PostgreSQL on the host so the jest e2e suites
+# (server/test/*.e2e-spec.ts) can run against a real database. The DB is
+# truncated at suite start, so it must never point at production data.
+#
+# Usage (from the project root):
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d postgres migrate
+#   cd server && npm run test:e2e
+
+services:
+  postgres:
+    # 54321 (not 5432) so a host Postgres never collides.
+    ports:
+      - "127.0.0.1:54321:5432"
+    # Docker Desktop's port proxy cannot reach containers attached ONLY to an
+    # internal network — join the (non-internal) proxy network as well so the
+    # host mapping materialises. Production config is unaffected: postgres
+    # still publishes nothing and only the API joins the proxy network.
+    networks: [finflow_net, proxy]
+
+  # Real MinIO for the e2e storage suite (test-only host port; the production
+  # config keeps MinIO internal-only). Root credentials come from the root
+  # .env, matching server/.env's MINIO_ACCESS_KEY/MINIO_SECRET_KEY. Same
+  # internal-network port-proxy gotcha as postgres — join the proxy network
+  # so the host mapping materialises.
+  minio:
+    ports:
+      - "127.0.0.1:19000:9000"
+    networks: [finflow_net, proxy]

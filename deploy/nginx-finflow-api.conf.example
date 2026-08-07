@@ -1,0 +1,35 @@
+# Peso-FinFlow API — reference server block for YOUR host nginx.
+#
+# The API container is reachable via the Docker network named `finflow_proxy`
+# (set PROXY_NETWORK in .env if yours differs). Copy this block into your
+# nginx (sites-available / conf.d), adjust `server_name` + TLS, then:
+#   nginx -t && systemctl reload nginx   # or: nginx -s reload
+#
+# Combined with deploy/nginx-finflow.conf.example (the web app), you get:
+#   https://finflow.example.com        → Flutter web build (static)
+#   https://api.finflow.example.com    → finflow-api container
+
+server {
+    listen 80;
+    server_name api.finflow.example.com;   # ← your API host (TLS on 443)
+
+    # Container name on the compose network; port is the container's 8080.
+    location / {
+        proxy_pass http://finflow-api:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-Id $request_id;
+
+        # Uploads (backups/attachments) can be large — match the API limits.
+        client_max_body_size 30m;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+
+    # Keep the API health endpoints out of the access log noise if you like.
+    location = /health { access_log off; }
+    location = /health/ready { access_log off; }
+}

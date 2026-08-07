@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/sync_session.dart';
 import '../../../../core/utils/id_generator.dart';
 import '../../../../database/app_database.dart';
 import '../../../../database/daos/ledger_dao.dart';
@@ -156,6 +157,7 @@ class AccountRepositoryImpl implements AccountRepository {
           isHidden: isCategory,
           createdAt: now,
           updatedAt: now,
+          userId: Value(SyncSession.instance.userId),
         ),
       );
 

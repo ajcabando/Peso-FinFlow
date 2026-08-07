@@ -37,6 +37,9 @@ class Transactions extends Table {
 
   DateTimeColumn get updatedAt => dateTime()();
 
+  /// Owning cloud user (null = local-only until adopted at sign-in).
+  TextColumn get userId => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

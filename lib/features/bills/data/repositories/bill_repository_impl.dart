@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/sync_session.dart';
 import '../../../../core/utils/id_generator.dart';
 import '../../../../database/app_database.dart';
 import '../../domain/models/bill.dart';
@@ -51,6 +52,7 @@ class BillRepositoryImpl implements BillRepository {
         reminderDaysBefore: Value(reminderDaysBefore),
         createdAt: now,
         updatedAt: now,
+        userId: Value(SyncSession.instance.userId),
       ),
     );
     return (await getById(id))!;

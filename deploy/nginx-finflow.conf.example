@@ -1,0 +1,48 @@
+# Peso-FinFlow web — reference server block for YOUR host nginx.
+#
+# The Docker build exports the static site (./build/web) and bundles no web
+# server. Copy this block into your nginx (sites-available / conf.d), then
+# adjust `server_name` and `root` to match. Reload with:
+#   nginx -t && systemctl reload nginx   # or: nginx -s reload
+
+server {
+    listen 80;
+    server_name finflow.example.com;      # ← your host / domain (HTTPS on 443)
+
+    root /var/www/finflow;                # ← where build/web was exported
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # SQLite WASM (drift) must be served as application/wasm, or the
+    # database fails to load. Scoped so the global MIME map is untouched.
+    # sqlite3.wasm is NOT content-hashed, so never cache it immutably.
+    location ~* \.wasm$ {
+        types { application/wasm wasm; }
+        default_type application/wasm;
+        add_header Cache-Control "no-cache";
+    }
+
+    # Un-hashed entry files change with every release — no-cache only.
+    location ~* ^/(main\.dart\.js|flutter\.js|flutter_bootstrap\.js|drift_worker\.js)$ {
+        add_header Cache-Control "no-cache";
+    }
+
+    # The PWA service worker must always be revalidated.
+    location = /flutter_service_worker.js {
+        add_header Cache-Control "no-cache";
+    }
+
+    # Hashed Flutter assets (assets/) — cache forever.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA fallback for go_router deep links (/accounts, /analytics, …).
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}

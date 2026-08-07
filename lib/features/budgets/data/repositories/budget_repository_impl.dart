@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/sync_session.dart';
 import '../../../../core/utils/id_generator.dart';
 import '../../../../database/app_database.dart';
 import '../../../accounts/domain/enums/account_kind.dart';
@@ -118,6 +119,7 @@ class BudgetRepositoryImpl implements BudgetRepository {
             currencyCode: currencyCode,
             createdAt: now,
             updatedAt: now,
+            userId: Value(SyncSession.instance.userId),
           ),
         );
       }

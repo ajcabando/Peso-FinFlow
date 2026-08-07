@@ -12,6 +12,11 @@ class Tags extends Table {
 
   DateTimeColumn get createdAt => dateTime()();
 
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+
+  /// Owning cloud user (null = local-only until adopted at sign-in).
+  TextColumn get userId => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 

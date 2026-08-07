@@ -25,6 +25,7 @@ import '../../../budgets/presentation/providers/budget_providers.dart';
 import '../../../security/data/biometric_service.dart';
 import '../../../security/presentation/providers/security_providers.dart';
 import '../../../security/presentation/widgets/pin_setup_sheet.dart';
+import '../../../sync/presentation/widgets/sync_card.dart';
 import '../../../transactions/presentation/providers/transaction_providers.dart';
 
 /// Appearance, currency and about — the foundation settings.
@@ -43,6 +44,9 @@ class SettingsPage extends ConsumerWidget {
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
           _ProfileHeader(),
+          const SizedBox(height: AppSpacing.xl),
+          const SectionHeader(title: 'Account & sync'),
+          const SyncCard(),
           const SizedBox(height: AppSpacing.xl),
           const SectionHeader(title: 'Appearance'),
           AppCard(

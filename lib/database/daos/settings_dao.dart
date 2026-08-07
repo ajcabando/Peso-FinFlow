@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../core/sync_session.dart';
 import '../app_database.dart';
 import '../tables/app_settings_table.dart';
 
@@ -25,10 +26,18 @@ class SettingsDao extends DatabaseAccessor<AppDatabase>
           .watchSingleOrNull()
           .map((row) => row?.value);
 
-  /// Inserts or replaces [value] for [key].
+  /// Inserts or replaces [value] for [key], stamping the change time and the
+  /// owning cloud user so the row can participate in sync.
   Future<void> set(String key, String value) => into(
     appSettings,
-  ).insertOnConflictUpdate(AppSettingsCompanion.insert(key: key, value: value));
+  ).insertOnConflictUpdate(
+    AppSettingsCompanion.insert(
+      key: key,
+      value: value,
+      updatedAt: Value(DateTime.now()),
+      userId: Value(SyncSession.instance.userId),
+    ),
+  );
 
   Future<void> remove(String key) =>
       (delete(appSettings)..where((t) => t.key.equals(key))).go();

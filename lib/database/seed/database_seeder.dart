@@ -1,17 +1,21 @@
 import 'package:drift/drift.dart';
 
 import '../../core/constants/app_constants.dart';
-import '../../core/utils/id_generator.dart';
 import '../../features/accounts/domain/enums/account_kind.dart';
 import '../../features/accounts/domain/enums/account_status.dart';
 import '../../features/accounts/domain/enums/account_type.dart';
 import '../app_database.dart';
 import 'default_categories.dart';
+import 'seed_ids.dart';
 
 /// Seeds a brand-new database with the system accounts and default categories.
 ///
 /// Idempotent by design: every block first checks whether its rows already
 /// exist, so this is safe to run on every `onCreate`.
+///
+/// Every seeded row uses a **deterministic** id from [SeedIds], so all
+/// devices converge on the same system account and category ids — a
+/// requirement for clean multi-device cloud sync (see `docs/SYNC.md`).
 class DatabaseSeeder {
   static Future<void> seed(AppDatabase db) async {
     final now = DateTime.now();
@@ -31,7 +35,7 @@ class DatabaseSeeder {
         .into(db.accounts)
         .insert(
           AccountsCompanion.insert(
-            id: IdGenerator.next(),
+            id: SeedIds.systemAccount,
             name: AppConstants.openingBalancesAccountName,
             kind: AccountKind.system,
             type: AccountType.openingBalance,
@@ -58,17 +62,17 @@ class DatabaseSeeder {
 
     await db.batch((batch) {
       batch.insertAll(db.accounts, [
-        for (final category in defaultCategories)
+        for (var i = 0; i < defaultCategories.length; i++)
           AccountsCompanion.insert(
-            id: IdGenerator.next(),
-            name: category.name,
+            id: SeedIds.category(i),
+            name: defaultCategories[i].name,
             kind: AccountKind.category,
-            type: category.type,
+            type: defaultCategories[i].type,
             status: AccountStatus.active,
             openingBalanceMinor: 0,
             currencyCode: 'PHP',
-            colorValue: category.color.toARGB32(),
-            iconCode: Value(category.iconCode),
+            colorValue: defaultCategories[i].color.toARGB32(),
+            iconCode: Value(defaultCategories[i].iconCode),
             sortOrder: 0,
             isHidden: true,
             createdAt: now,

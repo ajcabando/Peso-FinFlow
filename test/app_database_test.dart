@@ -19,11 +19,11 @@ void main() {
   });
 
   group('schema', () {
-    test('schema version is 3', () {
-      expect(db.schemaVersion, 3);
+    test('schema version is 4', () {
+      expect(db.schemaVersion, 4);
     });
 
-    test('creates all nine tables', () async {
+    test('creates all eleven tables', () async {
       final tables = await db
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -44,6 +44,8 @@ void main() {
           'app_settings',
           'budgets',
           'bills',
+          'sync_meta',
+          'sync_tombstones',
         ]),
       );
     });

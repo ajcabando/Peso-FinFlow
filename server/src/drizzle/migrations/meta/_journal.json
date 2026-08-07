@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786105712502,
+      "tag": "0000_lowly_tombstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786105980048,
+      "tag": "0001_numerous_squadron_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786108222837,
+      "tag": "0002_long_agent_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786109057191,
+      "tag": "0003_colossal_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786109287377,
+      "tag": "0004_gifted_zombie",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786140023868,
+      "tag": "0005_jittery_alex_power",
+      "breakpoints": true
+    }
+  ]
+}

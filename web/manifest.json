@@ -1,11 +1,12 @@
 {
-    "name": "finflow",
-    "short_name": "finflow",
+    "name": "Peso-FinFlow",
+    "short_name": "FinFlow",
+    "description": "Local-first personal finance with a true double-entry ledger. Budgets, bills, analytics and reports, fully offline.",
     "start_url": ".",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#6D5DF6",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

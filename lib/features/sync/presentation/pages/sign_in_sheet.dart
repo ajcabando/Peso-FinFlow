@@ -24,7 +24,7 @@ Future<void> showSignInSheet(BuildContext context) {
   );
 }
 
-/// Email/password or phone-OTP sign in / sign up.
+/// Email/password sign in or sign up against the self-hosted backend.
 class SignInSheet extends ConsumerStatefulWidget {
   const SignInSheet({super.key});
 
@@ -35,60 +35,33 @@ class SignInSheet extends ConsumerStatefulWidget {
 class _SignInSheetState extends ConsumerState<SignInSheet> {
   final _email = TextEditingController();
   final _password = TextEditingController();
-  final _phone = TextEditingController();
-  final _otp = TextEditingController();
 
   bool _createAccount = false;
-  bool _otpSent = false;
   bool _busy = false;
-  String _mode = 'email'; // 'email' | 'phone'
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
-    _phone.dispose();
-    _otp.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    final messenger = ScaffoldMessenger.of(context);
     final controller = ref.read(syncControllerProvider.notifier);
     setState(() => _busy = true);
     try {
-      if (_mode == 'email') {
-        final email = _email.text.trim();
-        final password = _password.text;
-        if (!_validEmail(email)) {
-          throw StateError('Enter a valid email address.');
-        }
-        if (password.length < 6) {
-          throw StateError('Password must be at least 6 characters.');
-        }
-        if (_createAccount) {
-          await controller.signUp(email, password);
-        } else {
-          await controller.signInWithEmail(email, password);
-        }
+      final email = _email.text.trim();
+      final password = _password.text;
+      if (!_validEmail(email)) {
+        throw StateError('Enter a valid email address.');
+      }
+      if (password.length < 8) {
+        throw StateError('Password must be at least 8 characters.');
+      }
+      if (_createAccount) {
+        await controller.signUp(email, password);
       } else {
-        final phone = _phone.text.trim();
-        if (phone.length < 7) {
-          throw StateError('Enter your phone number with country code.');
-        }
-        if (!_otpSent) {
-          await controller.sendPhoneOtp(phone);
-          setState(() => _otpSent = true);
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Code sent — check your phone.')),
-          );
-          return;
-        }
-        final token = _otp.text.trim();
-        if (token.isEmpty) {
-          throw StateError('Enter the code you received.');
-        }
-        await controller.verifyPhoneOtp(phone, token);
+        await controller.signInWithEmail(email, password);
       }
       if (mounted) {
         Navigator.of(context).pop();
@@ -97,10 +70,7 @@ class _SignInSheetState extends ConsumerState<SignInSheet> {
     } on Exception catch (e) {
       if (mounted) {
         context.showSnack(
-          e.toString().replaceFirst('Exception: ', '').replaceFirst(
-            'AuthException: ',
-            '',
-          ),
+          e.toString().replaceFirst('Exception: ', ''),
         );
       }
     } finally {
@@ -142,108 +112,59 @@ class _SignInSheetState extends ConsumerState<SignInSheet> {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              'Sign in to sync',
+              _createAccount ? 'Create your account' : 'Sign in to sync',
               style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
             Text(
               'Your data stays on this device — signing in mirrors it to '
-              'your account so it can follow you across devices.',
+              'your own server so it can follow you across devices.',
               style: textTheme.bodySmall?.copyWith(
                 color: colors.onSurfaceVariant,
                 height: 1.4,
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'email', label: Text('Email')),
-                ButtonSegment(value: 'phone', label: Text('Phone')),
-              ],
-              selected: {_mode},
-              onSelectionChanged: (selection) =>
-                  setState(() => _mode = selection.first),
+            TextField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(Icons.mail_outline, size: 20),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _password,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                prefixIcon: Icon(Icons.lock_outline, size: 20),
+              ),
+              onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: AppSpacing.lg),
-            if (_mode == 'email') ...[
-              TextField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.mail_outline, size: 20),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: _password,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock_outline, size: 20),
-                ),
-                onSubmitted: (_) => _submit(),
-              ),
-            ] else ...[
-              TextField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone number',
-                  hintText: '+63917 000 0000',
-                  prefixIcon: Icon(Icons.phone_outlined, size: 20),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                _otpSent
-                    ? 'Enter the 6-digit code sent to your phone.'
-                    : 'We send a one-time code by SMS. Phone sign-in needs '
-                          'an SMS provider enabled in Supabase.',
-                style: textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-              if (_otpSent) ...[
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: _otp,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  decoration: const InputDecoration(
-                    labelText: 'Verification code',
-                    prefixIcon: Icon(Icons.sms_outlined, size: 20),
-                  ),
-                  onSubmitted: (_) => _submit(),
-                ),
-              ],
-            ],
-            const SizedBox(height: AppSpacing.lg),
             AppButton(
-              label: _mode == 'email'
-                  ? (_createAccount ? 'Create account' : 'Sign in')
-                  : (_otpSent ? 'Verify & sign in' : 'Send code'),
-              icon: _mode == 'email'
-                  ? (_createAccount ? Icons.person_add_alt : Icons.login)
-                  : (_otpSent ? Icons.verified_user_outlined : Icons.sms_outlined),
+              label: _createAccount ? 'Create account' : 'Sign in',
+              icon: _createAccount
+                  ? Icons.person_add_alt
+                  : Icons.login,
               loading: _busy,
               onPressed: _busy ? null : _submit,
             ),
-            if (_mode == 'email') ...[
-              const SizedBox(height: AppSpacing.sm),
-              Center(
-                child: TextButton(
-                  onPressed: () =>
-                      setState(() => _createAccount = !_createAccount),
-                  child: Text(
-                    _createAccount
-                        ? 'Have an account? Sign in'
-                        : 'New here? Create an account',
-                  ),
+            const SizedBox(height: AppSpacing.sm),
+            Center(
+              child: TextButton(
+                onPressed: () =>
+                    setState(() => _createAccount = !_createAccount),
+                child: Text(
+                  _createAccount
+                      ? 'Have an account? Sign in'
+                      : 'New here? Create an account',
                 ),
               ),
-            ],
+            ),
           ],
         ),
       ),

@@ -32,6 +32,7 @@ import request from 'supertest';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { configureApp } from '../src/app.setup';
 import { AppModule } from '../src/app.module';
+import { CleanupService } from '../src/cleanup/cleanup.service';
 import { DatabaseService } from '../src/database/database.service';
 import { MailService } from '../src/mail/mail.service';
 import { MinioService } from '../src/storage/minio.service';
@@ -49,6 +50,7 @@ describe('Storage (e2e)', () => {
   let app: NestExpressApplication;
   let database: DatabaseService;
   let minio: MinioService;
+  let cleanup: CleanupService;
 
   const EMAIL = 'frank@example.com';
   const PASSWORD = 'correct-horse-battery-staple';
@@ -74,6 +76,7 @@ describe('Storage (e2e)', () => {
 
     database = app.get(DatabaseService);
     minio = app.get(MinioService);
+    cleanup = app.get(CleanupService);
     await database.db.execute(
       sql`TRUNCATE TABLE attachments, backups, sync_ops, ledger_entries, transaction_tags,
         app_settings, transactions, accounts, bills, budgets, tags,
@@ -370,5 +373,85 @@ describe('Storage (e2e)', () => {
   it('health/ready reports minio when storage is configured', async () => {
     const res = await http().get('/health/ready').expect(200);
     expect(res.body.checks.minio).toBe('up');
+  });
+
+  describe('cleanup sweep (Phase 8)', () => {
+    it('removes stale unconfirmed attachments + their MinIO objects', async () => {
+      // Create metadata (never upload): the row stays unconfirmed.
+      const body = randomBytes(2048);
+      const res = await http()
+        .post('/v1/attachments')
+        .set('Authorization', `Bearer ${auth.token}`)
+        .send({ mimeType: 'image/png', sizeBytes: body.length, sha256: sha256(body) })
+        .expect(201);
+      const id = res.body.attachment.id;
+      // Actually upload the blob too — the sweep must remove the ORPHANED
+      // OBJECT as well as the metadata row (a real client-crash scenario).
+      const put = await fetch(res.body.uploadUrl, { method: 'PUT', body: body as unknown as BodyInit });
+      expect(put.status).toBe(200);
+
+      // Backdate created_at past the sweep cutoff (default max age 24 h).
+      await database.db.execute(
+        sql`UPDATE attachments SET created_at = now() - interval '2 days' WHERE id = ${id}`,
+      );
+      // Capture the object key BEFORE the sweep deletes the metadata row.
+      const keyRow = await database.db.execute(
+        sql`SELECT object_key FROM attachments WHERE id = ${id}`,
+      );
+      const objectKey = (keyRow.rows[0] as { object_key: string }).object_key;
+
+      const result = await cleanup.sweep();
+      expect(result.attachmentsRemoved).toBeGreaterThanOrEqual(1);
+
+      // Metadata row is gone AND the object is gone from MinIO.
+      const row = await database.db.execute(
+        sql`SELECT id FROM attachments WHERE id = ${id}`,
+      );
+      expect(row.rows).toHaveLength(0);
+      await expect(minio.stat(objectKey)).rejects.toMatchObject({
+        code: expect.stringMatching(/NotFound|NoSuchKey/),
+      });
+    });
+
+    it('sweeps stale unconfirmed backups too', async () => {
+      const body = randomBytes(1024);
+      const res = await http()
+        .post('/v1/backups')
+        .set('Authorization', `Bearer ${auth.token}`)
+        .send({ sha256: sha256(body), sizeBytes: body.length })
+        .expect(201);
+      const id = res.body.backup.id;
+      await database.db.execute(
+        sql`UPDATE backups SET created_at = now() - interval '3 days' WHERE id = ${id}`,
+      );
+
+      const result = await cleanup.sweep();
+      expect(result.backupsRemoved).toBeGreaterThanOrEqual(1);
+      const row = await database.db.execute(
+        sql`SELECT id FROM backups WHERE id = ${id}`,
+      );
+      expect(row.rows).toHaveLength(0);
+    });
+
+    it('leaves fresh unconfirmed uploads alone (within max age)', async () => {
+      const res = await http()
+        .post('/v1/attachments')
+        .set('Authorization', `Bearer ${auth.token}`)
+        .send({
+          mimeType: 'application/octet-stream',
+          sizeBytes: 32,
+          sha256: sha256(randomBytes(32)),
+        })
+        .expect(201);
+      const id = res.body.attachment.id;
+
+      const result = await cleanup.sweep();
+      // Only the rows backdated above are swept — this fresh one stays.
+      const row = await database.db.execute(
+        sql`SELECT id FROM attachments WHERE id = ${id}`,
+      );
+      expect(row.rows).toHaveLength(1);
+      expect(result.attachmentsRemoved).toBe(0);
+    });
   });
 });

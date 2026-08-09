@@ -6,6 +6,8 @@ import '../../../../core/utils/id_generator.dart';
 import '../../../../database/app_database.dart';
 import '../../../accounts/domain/enums/account_kind.dart';
 import '../../../accounts/domain/enums/account_type.dart';
+import '../../../sync/data/sync/sync_outbox_writer.dart';
+import '../../../sync/data/sync/sync_payloads.dart';
 import '../../domain/models/budget.dart';
 import '../../domain/models/budget_progress.dart';
 import '../../domain/repositories/budget_repository.dart';
@@ -16,10 +18,12 @@ import '../../domain/repositories/budget_repository.dart';
 /// (expense debits minus refunds) for the requested range, so a budget can
 /// never disagree with the double-entry source of truth.
 class BudgetRepositoryImpl implements BudgetRepository {
-  // ignore: prefer_initializing_formals
-  BudgetRepositoryImpl({required AppDatabase db}) : _db = db;
+  BudgetRepositoryImpl({required AppDatabase db, SyncOutboxWriter? outboxWriter})
+    : _db = db,
+      _outbox = outboxWriter ?? SyncOutboxWriter(db: db);
 
   final AppDatabase _db;
+  final SyncOutboxWriter _outbox;
 
   @override
   Stream<List<Budget>> watchBudgets() =>
@@ -121,6 +125,16 @@ class BudgetRepositoryImpl implements BudgetRepository {
             updatedAt: now,
             userId: Value(SyncSession.instance.userId),
           ),
+        );
+      }
+      // Operation-log: enqueue the budget upsert in the same transaction.
+      final row = await _db.budgetDao.getByCategory(categoryId);
+      if (row != null) {
+        await _outbox.enqueueUpsert(
+          entity: 'budget',
+          entityId: row.id,
+          payload: SyncPayloads.budget(row),
+          updatedAt: now,
         );
       }
     });

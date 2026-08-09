@@ -1,9 +1,9 @@
 /// Holds the id of the currently signed-in cloud user (if any).
 ///
 /// Repositories and DAOs read this when creating rows so every new row is
-/// tagged with its owner; the cloud-sync layer updates it from the Supabase
-/// auth state. `null` means "local-only" — the row will be adopted by the
-/// next account that signs in on this device.
+/// tagged with its owner; the cloud-sync layer updates it from the self-
+/// hosted auth session. `null` means "local-only" — the row will be adopted
+/// by the next account that signs in on this device.
 ///
 /// A plain mutable holder (rather than a provider) keeps the write path
 /// free of Riverpod plumbing while remaining trivially testable.

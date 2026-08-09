@@ -4,15 +4,19 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/sync_session.dart';
 import '../../../../core/utils/id_generator.dart';
 import '../../../../database/app_database.dart';
+import '../../../sync/data/sync/sync_outbox_writer.dart';
+import '../../../sync/data/sync/sync_payloads.dart';
 import '../../domain/models/bill.dart';
 import '../../domain/repositories/bill_repository.dart';
 
 /// Persists recurring bills with ledger-independent lifecycle tracking.
 class BillRepositoryImpl implements BillRepository {
-  // ignore: prefer_initializing_formals
-  BillRepositoryImpl({required AppDatabase db}) : _db = db;
+  BillRepositoryImpl({required AppDatabase db, SyncOutboxWriter? outboxWriter})
+    : _db = db,
+      _outbox = outboxWriter ?? SyncOutboxWriter(db: db);
 
   final AppDatabase _db;
+  final SyncOutboxWriter _outbox;
 
   @override
   Stream<List<Bill>> watchBills() =>
@@ -41,20 +45,29 @@ class BillRepositoryImpl implements BillRepository {
     );
     final now = DateTime.now();
     final id = IdGenerator.next();
-    await _db.billDao.insert(
-      BillsCompanion.insert(
-        id: id,
-        name: name.trim(),
-        amountMinor: amountMinor,
-        currencyCode: currencyCode,
-        accountId: Value(accountId),
-        dueDayOfMonth: Value(dueDayOfMonth),
-        reminderDaysBefore: Value(reminderDaysBefore),
-        createdAt: now,
+    await _db.transaction(() async {
+      await _db.billDao.insert(
+        BillsCompanion.insert(
+          id: id,
+          name: name.trim(),
+          amountMinor: amountMinor,
+          currencyCode: currencyCode,
+          accountId: Value(accountId),
+          dueDayOfMonth: Value(dueDayOfMonth),
+          reminderDaysBefore: Value(reminderDaysBefore),
+          createdAt: now,
+          updatedAt: now,
+          userId: Value(SyncSession.instance.userId),
+        ),
+      );
+      final row = (await _db.billDao.getById(id))!;
+      await _outbox.enqueueUpsert(
+        entity: 'bill',
+        entityId: id,
+        payload: SyncPayloads.bill(row),
         updatedAt: now,
-        userId: Value(SyncSession.instance.userId),
-      ),
-    );
+      );
+    });
     return (await getById(id))!;
   }
 
@@ -79,19 +92,29 @@ class BillRepositoryImpl implements BillRepository {
     if (existing == null) {
       throw const NotFoundException('Bill not found.');
     }
-    await _db.billDao.updateRow(
-      BillsCompanion(
-        id: Value(id),
-        name: Value(name.trim()),
-        amountMinor: Value(amountMinor),
-        currencyCode: Value(currencyCode),
-        accountId: Value(accountId),
-        dueDayOfMonth: Value(dueDayOfMonth),
-        reminderDaysBefore: Value(reminderDaysBefore),
-        isActive: Value(isActive),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
+    final now = DateTime.now();
+    await _db.transaction(() async {
+      await _db.billDao.updateRow(
+        BillsCompanion(
+          id: Value(id),
+          name: Value(name.trim()),
+          amountMinor: Value(amountMinor),
+          currencyCode: Value(currencyCode),
+          accountId: Value(accountId),
+          dueDayOfMonth: Value(dueDayOfMonth),
+          reminderDaysBefore: Value(reminderDaysBefore),
+          isActive: Value(isActive),
+          updatedAt: Value(now),
+        ),
+      );
+      final row = (await _db.billDao.getById(id))!;
+      await _outbox.enqueueUpsert(
+        entity: 'bill',
+        entityId: id,
+        payload: SyncPayloads.bill(row),
+        updatedAt: now,
+      );
+    });
     return (await getById(id))!;
   }
 
@@ -101,13 +124,23 @@ class BillRepositoryImpl implements BillRepository {
     if (existing == null) {
       throw const NotFoundException('Bill not found.');
     }
-    await _db.billDao.updateRow(
-      BillsCompanion(
-        id: Value(id),
-        lastPaidOn: Value(DateTime.now()),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
+    final now = DateTime.now();
+    await _db.transaction(() async {
+      await _db.billDao.updateRow(
+        BillsCompanion(
+          id: Value(id),
+          lastPaidOn: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      final row = (await _db.billDao.getById(id))!;
+      await _outbox.enqueueUpsert(
+        entity: 'bill',
+        entityId: id,
+        payload: SyncPayloads.bill(row),
+        updatedAt: now,
+      );
+    });
     return (await getById(id))!;
   }
 

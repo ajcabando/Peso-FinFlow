@@ -3,19 +3,19 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide TableUpdate;
 
 import '../../../../app/providers/app_providers.dart';
+import '../../data/auth/token_store.dart';
 import '../providers/sync_providers.dart';
 
 /// Mounted once at the app root. Owns the sync session's background work:
 ///
-///  * reacts to Supabase auth state changes (sign-in adopts + syncs),
+///  * reacts to auth session changes (sign-in adopts + syncs),
 ///  * pushes shortly after any local database write (debounced),
 ///  * syncs when the app returns to the foreground,
 ///  * re-syncs periodically while signed in.
 ///
-/// With no Supabase credentials compiled in, everything here is a no-op.
+/// With no `FINFLOW_API_URL` define, everything here is a no-op (fully local).
 class SyncBootstrap extends ConsumerStatefulWidget {
   const SyncBootstrap({super.key, required this.child});
 
@@ -37,9 +37,6 @@ class _SyncBootstrapState extends ConsumerState<SyncBootstrap>
     WidgetsBinding.instance.addObserver(this);
     if (!ref.read(syncConfigProvider).enabled) return;
 
-    final engine = ref.read(syncEngineProvider);
-    if (engine == null) return;
-
     _dbSub = ref.read(databaseProvider).tableUpdates().listen((_) {
       _debounce?.cancel();
       _debounce = Timer(const Duration(seconds: 2), _syncNow);
@@ -54,14 +51,13 @@ class _SyncBootstrapState extends ConsumerState<SyncBootstrap>
   }
 
   void _handleInitialSession() {
-    try {
-      final session = Supabase.instance.client.auth.currentSession;
-      if (session != null) {
+    final auth = ref.read(authServiceProvider);
+    if (auth == null) return;
+    auth.currentSession().then((session) {
+      if (session != null && session.userId.isNotEmpty) {
         ref.read(syncControllerProvider.notifier).onSessionChanged(session);
       }
-    } on Object {
-      // Supabase not initialised / no session — signed out state.
-    }
+    });
   }
 
   @override
@@ -69,7 +65,13 @@ class _SyncBootstrapState extends ConsumerState<SyncBootstrap>
     if (state == AppLifecycleState.resumed) _syncNow();
   }
 
-  void _syncNow() => ref.read(syncControllerProvider.notifier).syncNow();
+  void _syncNow() {
+    final controller = ref.read(syncControllerProvider.notifier);
+    controller.syncNow();
+    // Heartbeat for the (daily/weekly/monthly) cloud-backup schedule — the
+    // picker sets the cadence, this timer decides *when* it fires.
+    controller.maybeRunScheduledBackup();
+  }
 
   @override
   void dispose() {
@@ -83,10 +85,10 @@ class _SyncBootstrapState extends ConsumerState<SyncBootstrap>
   @override
   Widget build(BuildContext context) {
     // Live auth changes (sign-in/out, token refresh) drive the controller.
-    ref.listen<AsyncValue<Session?>>(authSessionProvider, (previous, next) {
-      ref
-          .read(syncControllerProvider.notifier)
-          .onSessionChanged(next.valueOrNull);
+    ref.listen<AsyncValue<AuthTokens?>>(authSessionProvider, (previous, next) {
+      final session = next.valueOrNull;
+      if (session != null && session.userId.isEmpty) return;
+      ref.read(syncControllerProvider.notifier).onSessionChanged(session);
     });
     return widget.child;
   }

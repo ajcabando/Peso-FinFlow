@@ -317,7 +317,8 @@ Client retry after conflicts:
 ```jsonc
 // 200 OK
 {
-  "ops": [ /* ops with seq > cursor, oldest first, parents before children */ ],
+  "ops": [ /* ops with seq > cursor, oldest first, parents before children;
+               each op carries its immutable server-assigned `seq` */ ],
   "nextCursor": 2042,     // 0 when no more ops remain
   "truncated": false
 }
@@ -325,6 +326,11 @@ Client retry after conflicts:
 
 - Pull pages are **repeatable**: the same `cursor` always returns the same ops
   (`seq` is immutable). `nextCursor == 0` ⇒ caught up.
+- **Every pulled op carries its `seq`** — this is how a client persists an
+  exact cursor: `nextCursor` is `0` on the final (non-truncated) page as a
+  "caught up" sentinel, so a client that only tracked `nextCursor` would
+  stall one page short and re-fetch the tail on every sync. Instead it
+  advances its stored cursor to the max `seq` among the ops it applied.
 - The client applies ops locally in one transaction: `upsert` → insert/replace
   row (+ children), `delete` → hard-delete the local row. Applied deletes are
   marked so the tombstone trigger does **not** re-queue them into the outbox.

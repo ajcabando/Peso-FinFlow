@@ -7,6 +7,8 @@ import '../../../../core/sync_session.dart';
 import '../../../../core/utils/id_generator.dart';
 import '../../../../database/app_database.dart';
 import '../../../../database/daos/ledger_dao.dart';
+import '../../../sync/data/sync/sync_outbox_writer.dart';
+import '../../../sync/data/sync/sync_payloads.dart';
 import '../../../transactions/domain/enums/normal_balance_side.dart';
 import '../../domain/enums/account_type.dart';
 import '../../../transactions/domain/engine/transaction_builder.dart';
@@ -25,10 +27,12 @@ class AccountRepositoryImpl implements AccountRepository {
   AccountRepositoryImpl({
     required this.db,
     required this.transactionRepository,
-  });
+    SyncOutboxWriter? outboxWriter,
+  }) : _outbox = outboxWriter ?? SyncOutboxWriter(db: db);
 
   final AppDatabase db;
   final TransactionRepository transactionRepository;
+  final SyncOutboxWriter _outbox;
 
   @override
   Stream<List<Account>> watchAccounts() =>
@@ -180,6 +184,15 @@ class AccountRepositoryImpl implements AccountRepository {
           ),
         );
       }
+
+      // Operation-log: enqueue the account upsert in the same transaction.
+      final row = (await db.accountDao.getById(id))!;
+      await _outbox.enqueueUpsert(
+        entity: 'account',
+        entityId: id,
+        payload: SyncPayloads.account(row),
+        updatedAt: now,
+      );
     });
 
     return (await getById(id))!;
@@ -201,22 +214,32 @@ class AccountRepositoryImpl implements AccountRepository {
         );
       }
     }
-    await db.accountDao.updateAccount(
-      AccountsCompanion(
-        id: Value(account.id),
-        name: Value(account.name),
-        institution: Value(account.institution),
-        type: Value(account.type),
-        status: Value(account.status),
-        currencyCode: Value(account.currencyCode),
-        colorValue: Value(account.colorValue),
-        iconCode: Value(account.iconCode),
-        notes: Value(account.notes),
-        sortOrder: Value(account.sortOrder),
-        isHidden: Value(account.isHidden),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
+    final now = DateTime.now();
+    await db.transaction(() async {
+      await db.accountDao.updateAccount(
+        AccountsCompanion(
+          id: Value(account.id),
+          name: Value(account.name),
+          institution: Value(account.institution),
+          type: Value(account.type),
+          status: Value(account.status),
+          currencyCode: Value(account.currencyCode),
+          colorValue: Value(account.colorValue),
+          iconCode: Value(account.iconCode),
+          notes: Value(account.notes),
+          sortOrder: Value(account.sortOrder),
+          isHidden: Value(account.isHidden),
+          updatedAt: Value(now),
+        ),
+      );
+      final row = (await db.accountDao.getById(account.id))!;
+      await _outbox.enqueueUpsert(
+        entity: 'account',
+        entityId: account.id,
+        payload: SyncPayloads.account(row),
+        updatedAt: now,
+      );
+    });
     return (await getById(account.id))!;
   }
 

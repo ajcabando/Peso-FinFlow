@@ -50,6 +50,7 @@ abstract final class WidgetDb {
 Widget pumpApp(
   AppDatabase db, {
   required Widget child,
+  List<Override> extraOverrides = const [],
   List<Account>? accounts,
   List<Account>? categories,
   List<Bill>? bills,
@@ -68,6 +69,7 @@ Widget pumpApp(
   return ProviderScope(
     overrides: [
       databaseProvider.overrideWithValue(db),
+      ...extraOverrides,
       if (accounts != null)
         realAccountsProvider.overrideWith((ref) => Stream.value(accounts)),
       if (categories != null)

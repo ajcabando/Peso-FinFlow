@@ -138,6 +138,6 @@ never be double-counted.
 - **10. Backup & restore** — ✅ portable JSON snapshot
 - **11. Security** — ✅ PIN + biometrics (device-level at-rest encryption remains a future hardening item)
 - **12. AI insights** — ⏳ next: rule-based insights first, then an AI provider once a key is available
-- **13. Optional cloud sync** — ⏳ planned path: Supabase + email/password, offline-first via `drift_supabase` (or the drift sync API), with a Local/Cloud toggle defaulting to Local
+- **13. Optional cloud sync** — ✅ self-hosted op-log sync (NestJS + Postgres + MinIO): email/password auth, operation-log push/pull with CAS + LWW conflict resolution, device registry, encrypted cloud backups. Offline-first: the local DB is authoritative; sync is opt-in via `FINFLOW_API_URL` (see `docs/SELF_HOSTED.md`)
 - **14. Performance** — ✅ windowed list + 50k stress harness
 - **15. Release hardening** — ✅ analyzer clean, 180 tests, web release build

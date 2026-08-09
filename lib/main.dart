@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app.dart';
 import 'app/demo_data_seeder.dart';
 import 'app/router/app_router.dart';
 import 'features/sync/domain/sync_config.dart';
+import 'features/sync/data/sync/device_registry.dart';
 
 /// When true (built with `--dart-define=FINFLOW_DEMO_DATA=true`), the app
 /// seeds realistic demo data on first launch — used for store screenshots
@@ -20,14 +20,13 @@ const String _screenshotScreen = String.fromEnvironment('FINFLOW_SCREEN');
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Cloud sync is opt-in: only initialise Supabase when credentials were
-  // compiled in. Without them the app runs fully local, as before.
+  // Cloud sync is opt-in: the self-hosted API URL is compiled in via
+  // `--dart-define=FINFLOW_API_URL`. Without it the app runs fully local.
   final syncConfig = SyncConfig.fromEnvironment();
   if (syncConfig.enabled) {
-    await Supabase.initialize(
-      url: syncConfig.supabaseUrl,
-      publishableKey: syncConfig.supabaseAnonKey,
-    );
+    // Warm the device identity so first-login is snappy; nothing else to
+    // initialise eagerly — the sync stack is wired through Riverpod.
+    await DeviceRegistry.instance.deviceId();
   }
 
   if (_demoData) {

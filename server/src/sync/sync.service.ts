@@ -293,6 +293,7 @@ export class SyncService {
     limit: number,
   ): Promise<{
     ops: {
+      seq: number;
       opId: string;
       entity: string;
       entityId: string;
@@ -330,6 +331,10 @@ export class SyncService {
     );
 
     const ops = ordered.map((r) => ({
+      // Each pulled op carries its immutable server-assigned `seq` so a
+      // client can persist an exact cursor past the final page (where
+      // `nextCursor` is the 0 "caught up" sentinel).
+      seq: r.seq,
       opId: r.opId,
       entity: r.entity,
       entityId: r.entityId,

@@ -92,6 +92,19 @@ export const envSchema = z.object({
   MAX_BACKUP_BYTES: z.coerce.number().int().positive().default(100 * 1024 * 1024),
 
   // -------------------------------------------------------------------------
+  // Storage cleanup sweep (Phase 8) — removes unconfirmed uploads + objects
+  // -------------------------------------------------------------------------
+  STORAGE_CLEANUP_ENABLED: booleanFromString,
+  // How often the sweep runs (seconds).
+  STORAGE_CLEANUP_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(6 * 3600),
+  // Unconfirmed uploads older than this are removed (hours).
+  STORAGE_CLEANUP_MAX_AGE_HOURS: z.coerce.number().int().positive().default(24),
+
+  // -------------------------------------------------------------------------
   // Redis (Phase 4+) — empty REDIS_URL disables Redis (limiter falls back to
   // in-memory; health check skips it).
   // -------------------------------------------------------------------------

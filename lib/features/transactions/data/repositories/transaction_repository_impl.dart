@@ -6,6 +6,7 @@ import '../../../../core/utils/id_generator.dart';
 import '../../../../database/app_database.dart';
 import '../../../accounts/domain/enums/account_kind.dart';
 import '../../../accounts/domain/enums/account_type.dart';
+import '../../../sync/data/sync/sync_outbox_writer.dart';
 import '../../domain/engine/double_entry_engine.dart';
 import '../../domain/enums/ledger_direction.dart';
 import '../../domain/enums/transaction_type.dart';
@@ -25,10 +26,12 @@ import '../../domain/repositories/transaction_repository.dart';
 /// validated by [DoubleEntryEngine] and applied inside one database
 /// transaction, so a crash mid-write can never leave the ledger unbalanced.
 class TransactionRepositoryImpl implements TransactionRepository {
-  // ignore: prefer_initializing_formals
-  TransactionRepositoryImpl({required AppDatabase db}) : _db = db;
+  TransactionRepositoryImpl({required AppDatabase db, SyncOutboxWriter? outboxWriter})
+    : _db = db,
+      _outbox = outboxWriter ?? SyncOutboxWriter(db: db);
 
   final AppDatabase _db;
+  final SyncOutboxWriter _outbox;
 
   @override
   Stream<List<FinancialTransaction>> watchAll() => _db.transactionDao
@@ -178,10 +181,18 @@ class TransactionRepositoryImpl implements TransactionRepository {
     );
     final entries = _entryCompanions(id, draft);
 
-    await _db.transactionDao.insertWithEntries(
-      header: transaction,
-      entries: entries,
-    );
+    await _db.transaction(() async {
+      await _db.transactionDao.insertWithEntries(
+        header: transaction,
+        entries: entries,
+      );
+      // Operation-log: enqueue the upsert in the SAME transaction as the row.
+      await _outbox.enqueueUpsert(
+        entity: 'transaction',
+        entityId: id,
+        payload: _wirePayload(id: id, draft: draft, createdAt: now, updatedAt: now, entries: entries),
+      );
+    });
 
     return (await getById(id))!;
   }
@@ -204,10 +215,24 @@ class TransactionRepositoryImpl implements TransactionRepository {
     );
     final entries = _entryCompanions(id, draft);
 
-    await _db.transactionDao.replaceWithEntries(
-      header: transaction,
-      entries: entries,
-    );
+    await _db.transaction(() async {
+      await _db.transactionDao.replaceWithEntries(
+        header: transaction,
+        entries: entries,
+      );
+      // Operation-log: enqueue the upsert in the SAME transaction as the row.
+      await _outbox.enqueueUpsert(
+        entity: 'transaction',
+        entityId: id,
+        payload: _wirePayload(
+          id: id,
+          draft: draft,
+          createdAt: existing.createdAt,
+          updatedAt: now,
+          entries: entries,
+        ),
+      );
+    });
 
     return (await getById(id))!;
   }
@@ -258,6 +283,42 @@ class TransactionRepositoryImpl implements TransactionRepository {
           currencyCode: draft.currencyCode,
         ),
     ];
+  }
+
+  /// Wire-format transaction payload (docs/BACKEND_API.md §4) — header + the
+  /// ledger entries as a consistent set. Tags are attached via the DAO's
+  /// `tags` param, which the form does not currently pass.
+  Map<String, dynamic> _wirePayload({
+    required String id,
+    required DraftTransaction draft,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    required List<LedgerEntriesCompanion> entries,
+  }) {
+    return {
+      'id': id,
+      'type': draft.type.name,
+      'amount_minor': draft.amountMinor,
+      'currency_code': draft.currencyCode,
+      'occurred_at': draft.occurredAt.toUtc().toIso8601String(),
+      'note': draft.note,
+      'merchant': draft.merchant,
+      'reference_number': draft.referenceNumber,
+      'location': draft.location,
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
+      'ledgerEntries': [
+        for (final e in entries)
+          {
+            'id': e.id.value,
+            'account_id': e.accountId.value,
+            'direction': e.direction.value.name,
+            'amount_minor': e.amountMinor.value,
+            'currency_code': e.currencyCode.value,
+          },
+      ],
+      'transactionTags': const [],
+    };
   }
 
   /// Every referenced account must exist, use the draft's currency, and play a

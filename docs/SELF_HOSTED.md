@@ -1,10 +1,11 @@
 # FinFlow — Self-Hosted Backend & Migration Plan
 
-> Status: **approved design** (2026-08-07). This document is the master plan for
-> replacing the optional Supabase layer with a fully self-hosted stack. The API
-> contract it depends on lives in **`docs/BACKEND_API.md`**; the Flutter-side
-> sync today is described in **`docs/SYNC.md`** (which this plan supersedes
-> once the migration lands).
+> Status: **shipped** (backend Phases 1–4 on 2026-08-07/08, client Phases 5–7
+> on 2026-08-09). This document is the master plan for the self-hosted stack;
+> the API contract lives in **`docs/BACKEND_API.md`**. Supabase is fully
+> removed from the client (`supabase_flutter` dep, `SupabaseSyncRemote`,
+> `supabase/migrations/`, `docs/SYNC.md` all deleted). Remaining work: Phase 8
+> hardening follow-ups in `docs/REMAINING_TASKS.md`.
 
 ---
 
@@ -67,7 +68,8 @@ REST API (NestJS) ──────► PostgreSQL
 - **Repositories + Riverpod DI** — the repository pattern already exists and is
   the correct seam; the cloud refactor adds new repositories, never duplicates
   the existing ones.
-- **All 193 tests** — they must stay green at every phase.
+- **All 209 Flutter tests** (and 128 server tests: 40 unit + 88 e2e) — they
+  must stay green at every phase.
 - **PWA/Web build** (`web/`, `Dockerfile`) — unchanged; the web target just
   talks to the new API the same way mobile does.
 
@@ -401,11 +403,14 @@ Full wire contract: **`docs/BACKEND_API.md` §4**. Design summary:
 ### Pull
 
 - `GET /sync/pull?cursor=N&limit=1000` → ops with `seq > N`, oldest-first,
-  grouped by entity with parents before children. Response carries
-  `nextCursor` (0 if nothing left). The client applies ops to the local DB in a
-  transaction: `upsert` replaces the row (children as a consistent set),
-  `delete` hard-deletes the local row. Applied deletes are bookkept so the
-  tombstone trigger does **not** re-queue them into the outbox (no loops).
+  grouped by entity with parents before children. **Every pulled op carries
+  its immutable `seq`**; `nextCursor` is the max seq while a page is
+  truncated and `0` on the final page (the "caught up" sentinel) — a client
+  persists its cursor as the max `seq` among applied ops so the tail page is
+  never re-fetched. The client applies ops to the local DB in a transaction:
+  `upsert` replaces the row (children as a consistent set), `delete`
+  hard-deletes the local row. Applied deletes are bookkept so the tombstone
+  trigger does **not** re-queue them into the outbox (no loops).
 
 ### Deletes
 
@@ -566,9 +571,9 @@ the backend is actually live.
 | Flutter | Existing suite + new | `op_conflict_resolver_test.dart`, `op_sync_engine_test.dart` (fake remote), `cloud_backup_crypto_test.dart` (round-trip + tamper), auth service against a mocked `http.Client` |
 | CI | GitHub Actions | `flutter analyze` + `flutter test`; `server: npm test` + docker-compose smoke |
 
-The existing 193 Flutter tests must pass **throughout** the migration — the
-row-delta engine is removed only when the op-log engine and its tests are
-landed and green (Section 11, Phase 6).
+The suite sat at 193 tests through the backend phases and is now **209** after
+Phases 5–7 (op-log engine tests, conflict resolver, backup crypto, pagination
+and persistent-conflict regressions).
 
 ---
 
@@ -610,13 +615,26 @@ the final phase flips the flag.
 | **3 ✅ shipped 2026-08-07** | Op-log sync engine: `sync_ops` (migrations `0002`–`0004`), current-state mirror with **composite `(user_id, id)` PKs**, `POST /sync/push` + `GET /sync/pull`, `pg_advisory_xact_lock` CAS serialisation, LWW conflict resolver (server + pure-Dart-ported rules), parent-first pull ordering, atomic transaction children, LEDGER_IMBALANCE + FK-violation (`23503` → 409) handling, per-op payload cap (100 KB), 2 MB JSON body limit (shared bootstrap), serialised e2e (`maxWorkers: 1` — the suites share one test Postgres) | Verified: build clean; 36 unit + 49 e2e (real Postgres); live curl smoke (push/pull/LEDGER_IMBALANCE 409/device-mismatch 403); migration upgrade path 0000→0004 proven on a persisted volume; two-user same-category-id smoke (2 rows, 0 conflicts — regression for the global-PK bug). Review fixes: composite PKs (was global — cross-user collision + unscoped reads), deadlock-free lock ordering, fail-fast batch pre-validation, revoke TOCTOU closure, `attachments` FK CASCADE (was SET NULL — would break user-deletion cascade), 23503 diagnostic constraint name. Stack left running |
 | **3** | Op-log sync: `sync_ops` + current-state tables, push/pull, conflict resolver, children atomicity, cursors | push/pull e2e suite green; replay-from-scratch test |
 | **4 ✅ shipped 2026-08-07** | Storage + backup: MinIO module (presigned attachments/backups with two-step confirm), resource read/write endpoints (§5) that generate ops, `/ledger` derived balances, Redis-backed brute-force limiter + conditional health checks, pino log redaction | Verified: build clean; **40 unit + 85 e2e** (real Postgres + real MinIO); **31 live smoke checks**; compose config valid; stack healthy (postgres/minio/redis all up). Review fixes: confirm-time stat verification (404 never-uploaded / 400 over-limit, `MAX_BACKUP_BYTES`), MinIO probe hard timeout, pino req serializer strips query strings + auth headers, Redis `requirepass` conditional (wired; `REDIS_URL` must carry the password when set). Stack left running |
-| **5** | Flutter auth swap: `ApiClient`/`AuthService`/token store/device registry behind `FINFLOW_API_URL` define; Supabase still default. Includes the **Supabase data-migration decision**: a one-time export/import script for existing cloud users, or an explicit "cloud data resets" notice (must be decided before go-live — see Key Decisions) | flutter analyze + 193 tests green; manual sign-in against local stack |
-| **6** | Flutter op-log engine: schema v5, outbox writer, `OpSyncEngine`, conflict resolver; row-delta engine removed | new engine tests + full suite green; two-device manual test |
-| **7** | Cloud backup client + UI; devices UI; schedule job | round-trip + tamper tests green |
+| **5 ✅ shipped 2026-08-09** | Flutter auth swap: `ApiClient`/`AuthService`/token store/device registry behind `FINFLOW_API_URL` define (`http`, `flutter_secure_storage`, `device_info_plus`, `package_info_plus`); sign-in sheet + Account & sync card rewritten for the self-hosted API | flutter analyze clean + full suite green; live sign-in against local stack (curl + Chrome) |
+| **6 ✅ shipped 2026-08-09** | Flutter op-log engine: schema v5 (outbox + `version` columns + seq cursors), outbox writer in repository transactions, `OpSyncEngine` (flush → push → pull → apply), conflict resolver; `supabase_flutter`/`SupabaseSyncRemote`/`supabase/migrations`/`docs/SYNC.md` deleted | new engine tests + full suite green (209); two-device + pagination + persistent-conflict regressions |
+| **7 ✅ shipped 2026-08-09** | Cloud backup client + UI: `backup_crypto` (AES-256-GCM + PBKDF2), `cloud_backup_service`, Cloud backup card (passphrase, Back up now, Restore) | round-trip + tamper tests green |
 | **8** | Hardening: rate-limit tuning, log redaction, e2e soak, docs, App Store privacy update | security checklist complete |
 
-Supabase code is deleted in Phase 6–7 (not before): `supabase_flutter` dep,
-`SupabaseSyncRemote`, `supabase/migrations/`, `docs/SYNC.md` (superseded).
+Supabase code was deleted in Phase 6–7 (2026-08-09): `supabase_flutter` dep,
+`SupabaseSyncRemote`, `supabase/migrations/`, `docs/SYNC.md` (superseded). The
+client is now self-hosted-only.
+
+Review findings closed on 2026-08-09 (all with regression tests):
+
+1. **Pull cursor stall** — the server now returns each pulled op's `seq` so a
+   client persists an exact cursor past the final page (`nextCursor: 0` is
+   only the "caught up" sentinel); previously the tail page was re-fetched on
+   every sync. (Server + client + fake server fixed together.)
+2. **Persistent conflicts** — conflicts that survive the rebase retry now
+   surface "needs attention" and the stale op is dropped from the outbox
+   (no infinite retry loop); LWW-dropped losers are *not* flagged.
+3. **Fresh-entity rebase** — a CAS-stale op whose entity has no server state
+   re-anchors on `baseVersion 0` (a clean create) instead of looping.
 
 ---
 
@@ -650,10 +668,10 @@ The architecture is chosen so these land without redesign:
 | 2026-08-07 | Backups client-side encrypted (AES-256-GCM, PBKDF2 passphrase key) before upload — server is zero-knowledge |
 | 2026-08-07 | Phased rollout; Supabase remains the shipped default until the op-log client lands green |
 | 2026-08-07 | Ops carry `deviceId` (verified against the JWT claim) — per the spec, even though the token is authoritative |
-| 2026-08-07 | **Open decision**: migration of existing Supabase cloud data — one-time export/import vs. explicit reset (decide in Phase 5) |
+| 2026-08-07 | ~~Open decision~~ **Resolved 2026-08-09**: no Supabase cloud data in production (optional, sign-in-gated, never released) → no migration script shipped |
 | 2026-08-07 | Upload confirm is server-verified (`statObject`): 404 if never uploaded, 400 if the actual blob exceeds the declared/policy size — presigned PUTs cannot bound uploads |
 | 2026-08-07 | Redis `requirepass` conditional in compose (`REDIS_PASSWORD`); when set, `REDIS_URL` must carry the password |
 
-Next action: implement **Phase 5** (Flutter auth swap — `ApiClient`/
-`AuthService`/token store behind `FINFLOW_API_URL`; decide the Supabase
-cloud-data migration first — see Key Decisions).
+Next action: **Phase 8 hardening follow-ups** (`docs/REMAINING_TASKS.md`):
+cleanup sweep job for unconfirmed uploads, Redis auth end-to-end wiring,
+e2e soak, App Store privacy questionnaire update before go-live.

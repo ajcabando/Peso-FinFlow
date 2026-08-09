@@ -150,8 +150,12 @@ void main() {
     });
   });
 
-  group('tombstone triggers', () {
-    Future<void> insertAccount({required String id, String? userId}) async {
+  group('outbox delete triggers (v5)', () {
+    Future<void> insertAccount({
+      required String id,
+      String? userId,
+      int version = 0,
+    }) async {
       final now = DateTime.now();
       await db.into(db.accounts).insert(
         AccountsCompanion.insert(
@@ -168,27 +172,46 @@ void main() {
           createdAt: now,
           updatedAt: now,
           userId: Value(userId),
+          version: Value(version),
         ),
       );
     }
 
-    test('deleting a synced row writes a tombstone', () async {
-      await insertAccount(id: 'acc-1', userId: 'user-1');
+    test('deleting a synced row enqueues a delete op (base=version, version+1)',
+        () async {
+      await insertAccount(id: 'acc-1', userId: 'user-1', version: 3);
       await (db.delete(db.accounts)..where((t) => t.id.equals('acc-1'))).go();
 
-      final tombstones = await (db.select(db.syncTombstones)).get();
-      expect(tombstones, hasLength(1));
-      expect(tombstones.single.sourceTable, 'accounts');
-      expect(tombstones.single.rowId, 'acc-1');
-      expect(tombstones.single.userId, 'user-1');
-      expect(tombstones.single.deletedAt, isNotNull);
+      final ops = await (db.select(db.syncOutbox)).get();
+      expect(ops, hasLength(1));
+      final op = ops.single;
+      expect(op.entity, 'account');
+      expect(op.entityId, 'acc-1');
+      expect(op.operation, 'delete');
+      expect(op.baseVersion, 3);
+      expect(op.version, 4);
+      expect(op.payload, isNull);
+      expect(op.deletedAt, isNotNull);
+      // The op id is a valid UUIDv4 (the server validates `@IsUUID`).
+      expect(op.opId, matches(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'));
     });
 
-    test('deleting a local-only row writes no tombstone', () async {
+    test('deleting a local-only row enqueues no op', () async {
       await insertAccount(id: 'acc-2');
       await (db.delete(db.accounts)..where((t) => t.id.equals('acc-2'))).go();
 
-      expect(await (db.select(db.syncTombstones)).get(), isEmpty);
+      expect(await (db.select(db.syncOutbox)).get(), isEmpty);
+    });
+
+    test('v5 migration drops the old sync_tombstones table', () async {
+      final tables = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%'",
+          )
+          .get();
+      final names = tables.map((r) => r.read<String>('name')).toSet();
+      expect(names, isNot(contains('sync_tombstones')));
     });
   });
 }

@@ -25,6 +25,8 @@ import '../../../budgets/presentation/providers/budget_providers.dart';
 import '../../../security/data/biometric_service.dart';
 import '../../../security/presentation/providers/security_providers.dart';
 import '../../../security/presentation/widgets/pin_setup_sheet.dart';
+import '../../../sync/presentation/providers/sync_providers.dart';
+import '../../../sync/presentation/widgets/cloud_backup_card.dart';
 import '../../../sync/presentation/widgets/sync_card.dart';
 import '../../../transactions/presentation/providers/transaction_providers.dart';
 
@@ -47,6 +49,11 @@ class SettingsPage extends ConsumerWidget {
           const SizedBox(height: AppSpacing.xl),
           const SectionHeader(title: 'Account & sync'),
           const SyncCard(),
+          if (ref.watch(syncControllerProvider).signedIn) ...[
+            const SizedBox(height: AppSpacing.xl),
+            const SectionHeader(title: 'Cloud backup'),
+            const CloudBackupCard(),
+          ],
           const SizedBox(height: AppSpacing.xl),
           const SectionHeader(title: 'Appearance'),
           AppCard(

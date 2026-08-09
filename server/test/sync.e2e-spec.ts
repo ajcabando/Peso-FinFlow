@@ -245,6 +245,11 @@ describe('Sync (e2e)', () => {
       expect(first.body.ops).toHaveLength(7);
       expect(first.body.nextCursor).toBe(0);
       expect(first.body.truncated).toBe(false);
+      // Every pulled op carries its immutable server-assigned seq.
+      for (const o of first.body.ops) {
+        expect(typeof o.seq).toBe('number');
+        expect(o.seq).toBeGreaterThan(0);
+      }
 
       const entities = first.body.ops.map((o: { entity: string }) => o.entity);
       // parents (accounts/tags/settings) strictly before children (bills/budgets/transactions)
@@ -313,8 +318,9 @@ describe('Sync (e2e)', () => {
 
       // Push the exact original ops twice — the second replay must return the
       // SAME seqs as the first (idempotent ack), and nothing new lands in the
-      // log. (The pull envelope carries no `seq` by contract, so identical
-      // ack-seq across replays is the observable of idempotency.)
+      // log. (The pull envelope carries each op's `seq` so clients can persist
+      // a cursor past the final page; identical ack-seq across replays is the
+      // observable of idempotency.)
       const pushBatch = (ops: Record<string, unknown>[]) =>
         http()
           .post('/v1/sync/push')

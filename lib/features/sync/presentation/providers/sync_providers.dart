@@ -1,48 +1,99 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../app/providers/app_providers.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/sync_session.dart';
-import '../../data/supabase_sync_remote.dart';
-import '../../data/sync_engine.dart';
-import '../../data/sync_remote.dart';
+import '../../data/api/api_client.dart';
+import '../../data/auth/auth_service.dart';
+import '../../data/auth/token_store.dart';
+import '../../data/backup/backup_passphrase_store.dart';
+import '../../data/backup/cloud_backup_service.dart';
+import '../../data/sync/device_registry.dart';
+import '../../data/sync/op_sync_engine.dart';
+import '../../data/sync/sync_outbox_writer.dart';
 import '../../domain/sync_config.dart';
 import '../../domain/sync_status.dart';
 
-/// Cloud-sync configuration (dart-defines; disabled when absent).
+/// Cloud-sync configuration (the `FINFLOW_API_URL` define; disabled when
+/// absent — the app is then fully local, exactly as before).
 final syncConfigProvider = Provider<SyncConfig>(
   (ref) => SyncConfig.fromEnvironment(),
 );
 
-/// The Supabase client, or `null` when sync is not configured.
-final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
+/// Token persistence: secure storage on native, localStorage on web.
+final tokenStoreProvider = Provider<TokenStore>((ref) {
+  final store = createTokenStore();
+  ref.onDispose(store.clear);
+  return store;
+});
+
+/// The HTTP client for the self-hosted API, or `null` when not configured.
+final apiClientProvider = Provider<ApiClient?>((ref) {
   final config = ref.watch(syncConfigProvider);
   if (!config.enabled) return null;
-  return Supabase.instance.client;
+  return ApiClient(
+    baseUrl: config.apiBase,
+    tokenStore: ref.watch(tokenStoreProvider),
+  );
 });
 
-final syncRemoteProvider = Provider<SyncRemote?>((ref) {
-  final client = ref.watch(supabaseClientProvider);
-  if (client == null) return null;
-  return SupabaseSyncRemote(client: client);
+final deviceRegistryProvider = Provider<DeviceRegistry>(
+  (ref) => DeviceRegistry.instance,
+);
+
+/// Stores the cloud-backup passphrase for unattended scheduled backups
+/// (secure storage on native, localStorage on web).
+final backupPassphraseStoreProvider = Provider<BackupPassphraseStore>(
+  (ref) => createBackupPassphraseStore(),
+);
+
+/// Encrypted cloud backup client, or `null` when sync is not configured.
+final cloudBackupServiceProvider = Provider<CloudBackupService?>((ref) {
+  final api = ref.watch(apiClientProvider);
+  if (api == null) return null;
+  return CloudBackupService(
+    api: api,
+    db: ref.watch(databaseProvider),
+  );
 });
 
-final syncEngineProvider = Provider<SyncEngine?>((ref) {
-  final remote = ref.watch(syncRemoteProvider);
-  if (remote == null) return null;
-  return SyncEngine(db: ref.watch(databaseProvider), remote: remote);
+final authServiceProvider = Provider<AuthService?>((ref) {
+  final api = ref.watch(apiClientProvider);
+  if (api == null) return null;
+  return AuthService(
+    api: api,
+    tokenStore: ref.watch(tokenStoreProvider),
+    devices: ref.watch(deviceRegistryProvider),
+  );
 });
 
-/// The current auth session: the persisted session first, then live changes.
-/// `null` while signed out (or when sync is not configured).
-final authSessionProvider = StreamProvider<Session?>((ref) async* {
-  final client = ref.watch(supabaseClientProvider);
-  if (client == null) {
+/// Appends ops to the outbox from inside repository write transactions.
+final syncOutboxWriterProvider = Provider<SyncOutboxWriter?>((ref) {
+  final db = ref.watch(databaseProvider);
+  return SyncOutboxWriter(db: db);
+});
+
+/// The operation-log engine, or `null` when sync is not configured.
+final opSyncEngineProvider = Provider<OpSyncEngine?>((ref) {
+  final api = ref.watch(apiClientProvider);
+  final writer = ref.watch(syncOutboxWriterProvider);
+  if (api == null || writer == null) return null;
+  return OpSyncEngine(
+    db: ref.watch(databaseProvider),
+    api: api,
+    devices: ref.watch(deviceRegistryProvider),
+    outboxWriter: writer,
+  );
+});
+
+/// The persisted session (tokens), emitted live as it changes.
+final authSessionProvider = StreamProvider<AuthTokens?>((ref) async* {
+  final auth = ref.watch(authServiceProvider);
+  if (auth == null) {
     yield null;
     return;
   }
-  yield client.auth.currentSession;
-  yield* client.auth.onAuthStateChange.map((data) => data.session);
+  yield* auth.sessionStream;
 });
 
 /// Sync + auth controller for the Settings sync section.
@@ -51,21 +102,38 @@ final syncControllerProvider = NotifierProvider<SyncController, SyncStatus>(
 );
 
 class SyncController extends Notifier<SyncStatus> {
-  SupabaseClient? get _client => ref.read(supabaseClientProvider);
-  SyncEngine? get _engine => ref.read(syncEngineProvider);
+  AuthService? get _auth => ref.read(authServiceProvider);
+  OpSyncEngine? get _engine => ref.read(opSyncEngineProvider);
 
-  /// The last session id this controller processed — guards against the same
-  /// session being delivered twice (cold start: initial-session handler +
-  /// the auth stream both emit the persisted session).
-  String? _handledSessionUserId;
+  /// Serialises cloud-backup runs. Without this, a local write during an
+  /// in-flight scheduled backup (the 2 s debounce calls the same check) would
+  /// start a second concurrent export+encrypt+upload.
+  bool _backupInFlight = false;
 
   @override
-  SyncStatus build() => SyncStatus(enabled: ref.watch(syncConfigProvider).enabled);
+  SyncStatus build() {
+    final enabled = ref.watch(syncConfigProvider).enabled;
+    _loadPersistedBackupState();
+    return SyncStatus(enabled: enabled);
+  }
+
+  /// Restores the persisted schedule, passphrase flag and last-run time into
+  /// the status (called on provider build; fire-and-forget).
+  Future<void> _loadPersistedBackupState() async {
+    final dao = ref.read(settingsDaoProvider);
+    final scheduleName = await dao.get('backup.schedule');
+    final lastRunRaw = await dao.get('backup.lastRunAt');
+    final passphrase = await ref.read(backupPassphraseStoreProvider).read();
+    state = state.copyWith(
+      backupSchedule: BackupSchedule.fromName(scheduleName),
+      backupPassphraseSet: passphrase != null && passphrase.isNotEmpty,
+      lastBackupAt: DateTime.tryParse(lastRunRaw ?? '')?.toLocal(),
+    );
+  }
 
   /// Called whenever the auth session changes (sign-in, sign-out, restore).
-  Future<void> onSessionChanged(Session? session) async {
-    if (session == null) {
-      _handledSessionUserId = null;
+  Future<void> onSessionChanged(AuthTokens? session) async {
+    if (session == null || session.userId.isEmpty) {
       SyncSession.instance.userId = null;
       state = state.copyWith(
         signedIn: false,
@@ -73,22 +141,19 @@ class SyncController extends Notifier<SyncStatus> {
         email: null,
         syncing: false,
         error: null,
+        conflictNeedsAttention: false,
+        devices: const [],
       );
       return;
     }
-    final userId = session.user.id;
-    if (userId == _handledSessionUserId && state.signedIn) {
-      return; // Same session re-delivered — already adopting/syncing.
-    }
-    _handledSessionUserId = userId;
-    final email = session.user.email ?? session.user.phone;
-    SyncSession.instance.userId = userId;
+    SyncSession.instance.userId = session.userId;
     state = state.copyWith(
       signedIn: true,
-      userId: userId,
-      email: email,
+      userId: session.userId,
+      email: session.email,
       syncing: true,
       error: null,
+      conflictNeedsAttention: false,
     );
     final engine = _engine;
     if (engine == null) {
@@ -96,8 +161,8 @@ class SyncController extends Notifier<SyncStatus> {
       return;
     }
     try {
-      await engine.adoptLocalData(userId);
-      await _runSync(engine, userId);
+      await engine.adoptLocalData(session.userId);
+      await _runSync(engine);
     } on Exception catch (e) {
       state = state.copyWith(syncing: false, error: _message(e));
     }
@@ -107,56 +172,179 @@ class SyncController extends Notifier<SyncStatus> {
   /// debounce after a local write).
   Future<void> syncNow() async {
     final engine = _engine;
-    final userId = state.userId;
-    if (engine == null || userId == null) return;
+    if (engine == null || !state.signedIn) return;
     if (state.syncing) return;
     state = state.copyWith(syncing: true, clearError: true);
-    await _runSync(engine, userId);
+    await _runSync(engine);
   }
 
-  Future<void> _runSync(SyncEngine engine, String userId) async {
-    // The engine busy-guards re-entrant calls itself.
-    final result = await engine.sync(userId);
-    // `SyncEngine.sync` never throws — it returns a result. Surface failures
-    // instead of pretending the sync succeeded.
+  Future<void> _runSync(OpSyncEngine engine) async {
+    final result = await engine.sync();
     state = state.copyWith(
       syncing: false,
       lastSyncedAt: result.ok ? DateTime.now() : null,
       error: result.ok ? null : result.error,
+      conflictNeedsAttention: result.conflicts,
     );
+    if (result.ok && state.signedIn) {
+      await refreshDevices();
+    }
   }
 
-  Future<void> signInWithEmail(String email, String password) =>
-      _guard(() => _client!.auth.signInWithPassword(email: email, password: password));
-
-  Future<void> signUp(String email, String password) => _guard(
-    () => _client!.auth.signUp(email: email, password: password),
-  );
-
-  Future<void> sendPhoneOtp(String phone) =>
-      _guard(() => _client!.auth.signInWithOtp(phone: phone));
-
-  Future<void> verifyPhoneOtp(String phone, String token) => _guard(
-    () => _client!.auth.verifyOTP(
-      phone: phone,
-      token: token,
-      type: OtpType.sms,
-    ),
-  );
-
-  Future<void> signOut() async {
-    final client = _client;
-    if (client == null) return;
-    await client.auth.signOut();
-    // onSessionChanged(null) fires via the auth stream.
+  /// Fetches the device list for the signed-in account.
+  Future<void> refreshDevices() async {
+    final api = ref.read(apiClientProvider);
+    if (api == null || !state.signedIn) return;
+    try {
+      final response = await api.get('/devices');
+      final list = response['devices'];
+      if (list is List) {
+        state = state.copyWith(
+          devices: [
+            for (final item in list)
+              if (item is Map<String, dynamic>) CloudDevice.fromJson(item),
+          ],
+        );
+      }
+    } on Exception {
+      // Non-fatal — the devices list just stays as-is.
+    }
   }
 
-  Future<void> _guard(Future<void> Function() action) async {
-    final client = _client;
-    if (client == null) {
+  Future<void> signInWithEmail(String email, String password) async {
+    final auth = _auth;
+    if (auth == null) {
       throw StateError('Cloud sync is not configured for this build.');
     }
-    await action();
+    await auth.signIn(email: email, password: password);
+    // onSessionChanged fires via the session stream.
+  }
+
+  Future<void> signUp(String email, String password) async {
+    final auth = _auth;
+    if (auth == null) {
+      throw StateError('Cloud sync is not configured for this build.');
+    }
+    final session = await auth.signUp(email: email, password: password);
+    if (session.userId.isEmpty) return;
+    // New accounts need a login round-trip to mint tokens.
+    await auth.signIn(email: email, password: password);
+  }
+
+  Future<void> signOut() async {
+    final auth = _auth;
+    if (auth == null) return;
+    await auth.signOut();
+    // onSessionChanged(null) fires via the session stream.
+  }
+
+  Future<void> revokeDevice(String deviceId) async {
+    final api = ref.read(apiClientProvider);
+    if (api == null) return;
+    await api.delete('/devices/$deviceId');
+    await refreshDevices();
+  }
+
+  /// Stores the backup passphrase on this device. Required before a
+  /// non-manual schedule can be enabled (scheduled backups run unattended).
+  Future<void> saveBackupPassphrase(String passphrase) async {
+    final trimmed = passphrase.trim();
+    if (trimmed.isEmpty) {
+      throw const ValidationException('Enter a backup passphrase.');
+    }
+    await ref.read(backupPassphraseStoreProvider).write(trimmed);
+    state = state.copyWith(backupPassphraseSet: true);
+  }
+
+  /// Sets the backup schedule. Non-manual schedules throw
+  /// [ValidationException] when no passphrase is stored yet — the trigger
+  /// cannot run unattended without one.
+  Future<void> setBackupSchedule(BackupSchedule schedule) async {
+    if (schedule != BackupSchedule.manual) {
+      final passphrase = await ref.read(backupPassphraseStoreProvider).read();
+      if (passphrase == null || passphrase.isEmpty) {
+        throw const ValidationException(
+          'Set a backup passphrase first — scheduled backups run automatically.',
+        );
+      }
+    }
+    state = state.copyWith(backupSchedule: schedule);
+    await ref.read(settingsDaoProvider).set('backup.schedule', schedule.name);
+  }
+
+  /// Runs a cloud backup now, persists the passphrase for future scheduled
+  /// runs, and records the last-run time. Returns the created backup.
+  Future<CloudBackup> backupNow({required String passphrase}) async {
+    if (_backupInFlight) {
+      throw StateError('A cloud backup is already running.');
+    }
+    final service = ref.read(cloudBackupServiceProvider);
+    final userId = SyncSession.instance.userId;
+    if (service == null || userId == null) {
+      throw StateError('Cloud backup is not configured for this build.');
+    }
+    final trimmed = passphrase.trim();
+    if (trimmed.isEmpty) {
+      throw const ValidationException('Enter a backup passphrase.');
+    }
+    _backupInFlight = true;
+    try {
+      await ref.read(backupPassphraseStoreProvider).write(trimmed);
+      final backup = await service.backup(
+        passphrase: trimmed,
+        userId: userId,
+      );
+      final now = DateTime.now();
+      await ref
+          .read(settingsDaoProvider)
+          .set('backup.lastRunAt', now.toUtc().toIso8601String());
+      state = state.copyWith(backupPassphraseSet: true, lastBackupAt: now);
+      return backup;
+    } finally {
+      _backupInFlight = false;
+    }
+  }
+
+  /// Fires the scheduled backup when it is due: signed in, a non-manual
+  /// schedule, a stored passphrase, and `interval` elapsed since the last
+  /// run. Failures are swallowed — the next heartbeat retries.
+  Future<void> maybeRunScheduledBackup() async {
+    if (_backupInFlight) return;
+    final status = state;
+    if (!status.signedIn) return;
+    if (status.backupSchedule == BackupSchedule.manual) return;
+    final store = ref.read(backupPassphraseStoreProvider);
+    final passphrase = await store.read();
+    if (passphrase == null || passphrase.isEmpty) return;
+
+    final lastRaw = await ref.read(settingsDaoProvider).get('backup.lastRunAt');
+    final lastRun = DateTime.tryParse(lastRaw ?? '');
+    final now = DateTime.now();
+    if (lastRun != null &&
+        now.difference(lastRun.toLocal()) < status.backupSchedule.interval) {
+      return;
+    }
+
+    final service = ref.read(cloudBackupServiceProvider);
+    final userId = SyncSession.instance.userId;
+    if (service == null || userId == null) return;
+
+    // Re-check and set atomically (no await between) — the debounce can fire
+    // while a scheduled backup is in flight, and both would otherwise pass
+    // the due check on the stale lastRunAt.
+    if (_backupInFlight) return;
+    _backupInFlight = true;
+    try {
+      await service.backup(passphrase: passphrase, userId: userId);
+      await ref
+          .read(settingsDaoProvider)
+          .set('backup.lastRunAt', now.toUtc().toIso8601String());
+      state = state.copyWith(lastBackupAt: now);
+    } on Exception {
+      // Non-fatal — the next heartbeat tries again.
+    } finally {
+      _backupInFlight = false;
+    }
   }
 
   static String _message(Object error) =>

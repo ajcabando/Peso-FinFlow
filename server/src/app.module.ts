@@ -7,6 +7,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AuthModule } from './auth/auth.module';
 import { BackupsModule } from './backups/backups.module';
+import { CleanupModule } from './cleanup/cleanup.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { validateEnv } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
@@ -102,6 +103,7 @@ import { UsersModule } from './users/users.module';
     BackupsModule,
     ResourcesModule,
     LedgerModule,
+    CleanupModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

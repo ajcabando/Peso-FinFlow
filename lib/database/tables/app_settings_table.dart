@@ -15,6 +15,10 @@ class AppSettings extends Table {
   /// Owning cloud user (null = local-only until adopted at sign-in).
   TextColumn get userId => text().nullable()();
 
+  /// Operation-log CAS version (schema v5). 0 = never synced; bumped by every
+  /// repository write while signed in.
+  IntColumn get version => integer().withDefault(const Constant(0))();
+
   @override
   Set<Column> get primaryKey => {key};
 }

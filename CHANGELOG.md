@@ -1,8 +1,38 @@
 # Changelog
 
-All notable changes to **FinFlow** are documented here. This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions and uses the package version from `pubspec.yaml` (`0.1.0+1`).
+All notable changes to **FinFlow** are documented here. This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions and uses the package version from `pubspec.yaml` (`0.2.0+1`).
 
 ## [Unreleased]
+
+## [0.2.0] — 2026-08-09
+
+### Added — Self-hosted sync platform (Phases 1–9)
+
+**Backend (`server/` — NestJS 11, Drizzle + Postgres, MinIO, Redis, Docker Compose)**
+
+- **Auth** — email/password with Argon2id (OWASP params), 15-min JWT access tokens, opaque rotating refresh tokens bound to devices (reuse detection revokes the whole device chain), optional email verification + SMTP password reset, per-IP/per-email brute-force limiting (Redis-backed, fail-open).
+- **Device registry** — every login registers a device; users can revoke access per device from the app.
+- **Operation-log sync** — `POST /sync/push` + `GET /sync/pull`: idempotent ops with CAS on `base_version` + last-write-wins conflict resolution (version → updated_at → op_id), server-assigned cursors, parent-first pull order, per-entity advisory-lock serialisation, balanced-ledger validation mirrored from the Dart engine.
+- **Resources API** — CRUD for accounts, transactions, bills, budgets, tags, settings (writes flow through the sync engine; `security.*`/`pin.*` keys rejected server-side).
+- **Storage** — MinIO with presigned URLs; two-step upload confirm for attachments and backups with server-verified size limits and retention pruning.
+- **Zero-knowledge backups** — cloud backups are client-encrypted (AES-256-GCM + PBKDF2 passphrase); the server never sees plaintext.
+- Health/readiness endpoints (Postgres + MinIO + Redis checks), pino log redaction, `docker-compose.yml` stack with internal networking.
+
+**Client (schema v5 — sync outbox + op-log engine)**
+
+- **Op-log sync engine** — local `sync_outbox` fed by tombstone triggers; push→pull→converge with CAS + conflict resolution, 2s-debounced and heartbeat triggers.
+- **Account & sync UI** — sign-in, device management, manual sync button; opt-in via `FINFLOW_API_URL` (no define = 100% local).
+- **Encrypted cloud backups** — passphrase-protected backup with a configurable schedule (secure storage native / localStorage web), last-run tracking; safe for unattended runs.
+- `supabase_flutter` removed — the self-hosted API replaces the Supabase path end to end.
+
+### Fixed
+
+- Ops hardening: strict money coercion in the materializer, duplicate `transactionTags` dedupe, generated ledger-entry id collision loop, opId-reuse-across-entities 409, `serverCursor` stays `null` when nothing applied, password-reset invalidates prior tokens.
+
+### Test
+
+- **223 Flutter tests** — unit, repository, widget, stress, plus op-sync engine, conflict resolver, backup crypto, backup schedule.
+- **40 server unit + 88 e2e tests** against real Postgres + MinIO (cross-user regression, mixed-batch fail-fast, storage confirm paths).
 
 ## [0.1.0] — 2026-08-05
 

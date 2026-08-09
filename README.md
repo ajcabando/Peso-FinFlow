@@ -21,7 +21,7 @@
 
 ## Status
 
-**Phases 1–11 and 14–15 complete.** Phases 12 (AI insights) and 13 (cloud sync) are intentionally deferred — AI needs a provider key and cloud sync is local-first by design.
+**Phases 1–11 and 13–15 complete.** Phase 12 (AI insights) is deferred — it needs a provider key. Cloud sync is live as a self-hosted, opt-in service (NestJS + Postgres + MinIO); the app stays 100% local by default.
 
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
@@ -37,11 +37,11 @@
 | 10 | Backup & restore: portable full-database JSON snapshot (web + native) | ✅ |
 | 11 | Security: 4–8 digit PIN lock, biometric unlock (native), auto-lock | ✅ |
 | 12 | AI insights | ⏳ deferred (needs a provider key) |
-| 13 | Optional cloud sync | ⏳ deferred (local-first by design) |
+| 13 | Optional cloud sync — self-hosted op-log sync (NestJS + Postgres + MinIO), encrypted backups | ✅ |
 | 14 | Performance: windowed/paginated transaction list + 50k-row stress harness | ✅ |
-| 15 | Release hardening: analyzer clean, 177 tests, web release build | ✅ |
+| 15 | Release hardening: analyzer clean, 223 tests, web release build | ✅ |
 
-Validation: `flutter analyze` clean · **180 tests passing** (unit + repository + widget + stress) · web release build compiles.
+Validation: `flutter analyze` clean · **223 Flutter tests passing** (unit + repository + widget + stress) · web release build compiles · **40 server unit + 88 e2e tests** (real Postgres + MinIO).
 
 ---
 
@@ -127,6 +127,7 @@ never be double-counted.
 - **Reports** — month reports with income/expense/net summary, category breakdown and the full transaction list, exportable as CSV or a styled PDF statement.
 - **Backup & restore** — export the entire database (accounts, transactions, ledger, budgets, bills, settings) as one portable JSON file and restore it later; works identically on web and native.
 - **Security** — optional 4–8 digit PIN lock (salted SHA-256, never stored in plaintext), Touch ID / Face ID unlock on native, auto-lock on background, and a lock-now action.
+- **Self-hosted sync (opt-in)** — email/password accounts against your own server (NestJS + Postgres + MinIO, set via `FINFLOW_API_URL`): operation-log sync with conflict resolution (CAS + last-write-wins), device registry with per-device revoke, and zero-knowledge cloud backups — client-encrypted (AES-256-GCM + PBKDF2) with a configurable schedule. Off by default; without the define the app is fully local. See `docs/SELF_HOSTED.md` and `docs/BACKEND_API.md`.
 - **Settings** — theme (system/light/dark, persisted), default currency, category manager, security, backup.
 - **Performance** — the transaction list loads in fixed windows with database-level search and type filters, so 50k+ histories stay responsive (covered by a stress harness).
 - **Data model ready** — transactions, ledger, tags, attachments, settings, budgets and bills tables with the full double-entry plumbing (validation, atomic writes, reactive streams, semantic type rules).
@@ -140,4 +141,4 @@ never be double-counted.
 - **12. AI insights** — ⏳ next: rule-based insights first, then an AI provider once a key is available
 - **13. Optional cloud sync** — ✅ self-hosted op-log sync (NestJS + Postgres + MinIO): email/password auth, operation-log push/pull with CAS + LWW conflict resolution, device registry, encrypted cloud backups. Offline-first: the local DB is authoritative; sync is opt-in via `FINFLOW_API_URL` (see `docs/SELF_HOSTED.md`)
 - **14. Performance** — ✅ windowed list + 50k stress harness
-- **15. Release hardening** — ✅ analyzer clean, 180 tests, web release build
+- **15. Release hardening** — ✅ analyzer clean, 223 tests, web release build

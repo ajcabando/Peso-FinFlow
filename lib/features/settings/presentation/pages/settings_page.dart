@@ -2,6 +2,7 @@ import 'package:file_saver/file_saver.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/providers/app_providers.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -28,6 +29,7 @@ import '../../../security/presentation/providers/security_providers.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
 import '../../../profile/presentation/widgets/profile_edit_sheet.dart';
 import '../../../security/presentation/widgets/pin_setup_sheet.dart';
+import '../../../updates/presentation/providers/update_providers.dart';
 import '../../../sync/presentation/providers/sync_providers.dart';
 import '../../../sync/presentation/widgets/cloud_backup_card.dart';
 import '../../../sync/presentation/widgets/sync_card.dart';
@@ -194,32 +196,7 @@ class SettingsPage extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
           const SectionHeader(title: 'About'),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppConstants.appName,
-                  style: context.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  AppConstants.tagline,
-                  style: context.textTheme.bodySmall?.copyWith(
-                    color: context.colors.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Version 0.1.0 · ${CurrencyFormatter.decimalDigits(currency)} decimal '
-                  'digits for $currency',
-                  style: context.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
+          const _AboutCard(),
           const SizedBox(height: AppSpacing.xxl),
         ],
       ),
@@ -785,6 +762,144 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
         ],
       ),
     );
+  }
+}
+
+/// App info + live version display with a "check for updates" action.
+///
+/// The version comes from package_info (no more hardcoded numbers); the
+/// check queries the public GitHub releases feed and, when a newer build
+/// exists, offers to open its release page.
+class _AboutCard extends ConsumerWidget {
+  const _AboutCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(defaultCurrencyProvider);
+    final update = ref.watch(updateControllerProvider);
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppConstants.appName,
+            style: context.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            AppConstants.tagline,
+            style: context.textTheme.bodySmall?.copyWith(
+              color: context.colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline_rounded,
+                size: 16,
+                color: context.colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Version ${update.currentVersion ?? '…'} · '
+                  '${CurrencyFormatter.decimalDigits(currency)} decimal '
+                  'digits for $currency',
+                  style: context.textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: switch (update.state) {
+              UpdateCheckState.checking => 'Checking…',
+              UpdateCheckState.updateAvailable =>
+                'Update available — v${update.latest?.version ?? '?'}',
+              _ => 'Check for updates',
+            },
+            icon: switch (update.state) {
+              UpdateCheckState.updateAvailable =>
+                Icons.system_update_alt_rounded,
+              UpdateCheckState.error => Icons.error_outline_rounded,
+              _ => Icons.system_update_alt_outlined,
+            },
+            variant: AppButtonVariant.secondary,
+            loading: update.state == UpdateCheckState.checking,
+            onPressed: update.state == UpdateCheckState.checking
+                ? null
+                : () {
+                    if (update.state == UpdateCheckState.updateAvailable) {
+                      _showUpdateDialog(context, update);
+                    } else {
+                      _checkForUpdates(context, ref);
+                    }
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _checkForUpdates(BuildContext context, WidgetRef ref) async {
+    final status = await ref
+        .read(updateControllerProvider.notifier)
+        .checkForUpdates();
+    if (!context.mounted) return;
+    switch (status.state) {
+      case UpdateCheckState.upToDate:
+        final version = status.currentVersion;
+        context.showSnack(
+          version == null
+              ? "You're up to date."
+              : "You're up to date — v$version",
+        );
+      case UpdateCheckState.updateAvailable:
+        await _showUpdateDialog(context, status);
+      case UpdateCheckState.error:
+        context.showSnack(status.error ?? "Couldn't check for updates.");
+      case UpdateCheckState.idle:
+      case UpdateCheckState.checking:
+        break;
+    }
+  }
+
+  Future<void> _showUpdateDialog(BuildContext context, UpdateStatus status) async {
+    final latest = status.latest;
+    if (latest == null) return;
+    final viewRelease = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Update available'),
+        content: Text(
+          'Peso-FinFlow v${latest.version} is ready to install.\n\n'
+          "You're running v${status.currentVersion ?? '?'}. Open the release "
+          'page to grab the latest build.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('View release'),
+          ),
+        ],
+      ),
+    );
+    if (viewRelease != true || !context.mounted) return;
+    final opened = await launchUrl(
+      Uri.parse(latest.url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && context.mounted) {
+      context.showSnack("Couldn't open the release page.");
+    }
   }
 }
 

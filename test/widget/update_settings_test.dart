@@ -149,6 +149,55 @@ void main() {
     expect(find.text('Update available'), findsNothing);
   });
 
+  testWidgets('the dialog shows the release notes under What is new', (
+    tester,
+  ) async {
+    await pumpSettings(
+      tester,
+      UpdateStatus(
+        state: UpdateCheckState.updateAvailable,
+        currentVersion: '0.2.0',
+        latest: const UpdateInfo(
+          version: '0.3.0',
+          url: 'https://github.com/ajcabando/Peso-FinFlow/releases/tag/v0.3.0',
+          notes: '## Highlights\n- Profile feature\n- Update checker',
+        ),
+      ),
+    );
+    await scrollToAbout(tester);
+
+    await tester.tap(find.text('Update available — v0.3.0'));
+    await tester.pumpAndSettle();
+
+    expect(find.text("What's new"), findsOneWidget);
+    expect(find.text('Highlights'), findsOneWidget);
+    expect(find.text('Profile feature'), findsOneWidget);
+    expect(find.text('Update checker'), findsOneWidget);
+  });
+
+  testWidgets('the dialog falls back when a release has no notes', (
+    tester,
+  ) async {
+    await pumpSettings(
+      tester,
+      UpdateStatus(
+        state: UpdateCheckState.updateAvailable,
+        currentVersion: '0.2.0',
+        latest: const UpdateInfo(
+          version: '0.3.0',
+          url: 'https://github.com/ajcabando/Peso-FinFlow/releases/tag/v0.3.0',
+        ),
+      ),
+    );
+    await scrollToAbout(tester);
+
+    await tester.tap(find.text('Update available — v0.3.0'));
+    await tester.pumpAndSettle();
+
+    expect(find.text("What's new"), findsNothing);
+    expect(find.text('No release notes provided.'), findsOneWidget);
+  });
+
   testWidgets('a failed check surfaces the error message', (tester) async {
     await pumpSettings(
       tester,

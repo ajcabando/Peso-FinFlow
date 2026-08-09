@@ -39,9 +39,9 @@
 | 12 | AI insights | ⏳ deferred (needs a provider key) |
 | 13 | Optional cloud sync — self-hosted op-log sync (NestJS + Postgres + MinIO), encrypted backups | ✅ |
 | 14 | Performance: windowed/paginated transaction list + 50k-row stress harness | ✅ |
-| 15 | Release hardening: analyzer clean, 245 tests, web release build | ✅ |
+| 15 | Release hardening: analyzer clean, 250 tests, web release build | ✅ |
 
-Validation: `flutter analyze` clean · **245 Flutter tests passing** (unit + repository + widget + stress) · web release build compiles · **40 server unit + 88 e2e tests** (real Postgres + MinIO).
+Validation: `flutter analyze` clean · **250 Flutter tests passing** (unit + repository + widget + stress) · web release build compiles · **40 server unit + 88 e2e tests** (real Postgres + MinIO).
 
 ---
 
@@ -130,7 +130,7 @@ never be double-counted.
 - **Profile** — set your name and photo (Settings → top card, or tap the dashboard avatar); the dashboard greets you by first name ("Good morning, Alain"). Photos are compressed into a small data URI stored in app settings, so your profile syncs across devices when cloud sync is on.
 - **Self-hosted sync (opt-in)** — email/password accounts against your own server (NestJS + Postgres + MinIO, set via `FINFLOW_API_URL`): operation-log sync with conflict resolution (CAS + last-write-wins), device registry with per-device revoke, and zero-knowledge cloud backups — client-encrypted (AES-256-GCM + PBKDF2) with a configurable schedule. Off by default; without the define the app is fully local. See `docs/SELF_HOSTED.md` and `docs/BACKEND_API.md`.
 - **Settings** — profile (name + photo), theme (system/light/dark, persisted), default currency, category manager, security, backup, and a version/update checker in About.
-- **Update checking** — Settings → About shows the real installed version (from package_info) and can check the public GitHub releases feed for a newer build ("Check for updates"), surfacing an in-app dialog that opens the release page when one exists.
+- **Update checking** — Settings → About shows the real installed version (from package_info) and can check the public GitHub releases feed for a newer build ("Check for updates"), surfacing an in-app dialog with the release's "What's new" notes that opens the release page. A silent launch-time check pre-advertises an available update on the About card.
 - **Performance** — the transaction list loads in fixed windows with database-level search and type filters, so 50k+ histories stay responsive (covered by a stress harness).
 - **Data model ready** — transactions, ledger, tags, attachments, settings, budgets and bills tables with the full double-entry plumbing (validation, atomic writes, reactive streams, semantic type rules).
 
@@ -143,4 +143,4 @@ never be double-counted.
 - **12. AI insights** — ⏳ next: rule-based insights first, then an AI provider once a key is available
 - **13. Optional cloud sync** — ✅ self-hosted op-log sync (NestJS + Postgres + MinIO): email/password auth, operation-log push/pull with CAS + LWW conflict resolution, device registry, encrypted cloud backups. Offline-first: the local DB is authoritative; sync is opt-in via `FINFLOW_API_URL` (see `docs/SELF_HOSTED.md`)
 - **14. Performance** — ✅ windowed list + 50k stress harness
-- **15. Release hardening** — ✅ analyzer clean, 245 tests, web release build
+- **15. Release hardening** — ✅ analyzer clean, 250 tests, web release build

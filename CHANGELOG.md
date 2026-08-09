@@ -7,11 +7,15 @@ All notable changes to **FinFlow** are documented here. This project follows [Ke
 ### Added
 
 - **Profile** — set your display name and avatar photo (Settings → top card, or tap the dashboard avatar); the dashboard greets you by first name ("Good morning, Alain"). Photos are decoded with the native codec (HEIC included), resized to fit 384px and re-encoded as a compact JPEG, then stored as a small data URI in `app_settings` (`profile.*` keys) so the profile syncs across devices whenever cloud sync is on.
-- **Update checking** — Settings → About now shows the real installed version (from package_info, no more hardcoded numbers) with a "Check for updates" action that queries the public GitHub releases feed (`ajcabando/Peso-FinFlow`); when a newer build exists an in-app dialog offers to open its release page (via `url_launcher`). Numeric semver comparison ignores `v` prefixes and build metadata; the check is gated when the installed version can't be read so it never claims a release is newer than an unknown version.
+- **Update checking** — Settings → About now shows the real installed version (from package_info, no more hardcoded numbers) with a "Check for updates" action that queries the public GitHub releases feed (`ajcabando/Peso-FinFlow`); when a newer build exists an in-app dialog offers to open its release page (via `url_launcher`) and renders the release's "What's new" notes as markdown (`flutter_markdown`). Numeric semver comparison ignores `v` prefixes and build metadata; the check is gated when the installed version can't be read so it never claims a release is newer than an unknown version. A **silent launch-time check** pre-advertises an available update on the About card (no modal, no error toasts).
+
+### Fixed
+
+- The shell's floating quick-actions FAB no longer covers page content: every tab already cleared it (96–120px bottom padding) except Settings, which now matches (96px), and the FAB is hidden on the Settings tab entirely.
 
 ### Test
 
-- **245 Flutter tests** — profile greeting + edit flow, plus the update checker: version comparison, GitHub API parsing (mock HTTP client), the unknown-version gate, and every button/dialog state of the About card.
+- **250 Flutter tests** — profile greeting + edit flow, plus the update checker: version comparison, GitHub API parsing (mock HTTP client), the unknown-version gate, silent launch-time check (found + failed), and every button/dialog state of the About card including the "What's new" notes and empty-notes fallback.
 
 ## [0.2.0] — 2026-08-09
 

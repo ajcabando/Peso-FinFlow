@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_theme.dart';
 import '../features/security/presentation/widgets/security_gate.dart';
 import '../features/sync/presentation/widgets/sync_bootstrap.dart';
+import '../features/updates/presentation/providers/update_providers.dart';
 import 'providers/app_providers.dart';
 import 'router/app_router.dart';
 
@@ -19,21 +20,52 @@ class FinFlowApp extends ConsumerWidget {
 
     return SecurityGate(
       child: SyncBootstrap(
-        child: MaterialApp.router(
-        title: 'FinFlow',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(palette: palette),
-        darkTheme: AppTheme.dark(palette: palette),
-        themeMode: themeMode,
-        routerConfig: appRouter,
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [Locale('en')],
+        child: _UpdateNudge(
+          child: MaterialApp.router(
+            title: 'FinFlow',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(palette: palette),
+            darkTheme: AppTheme.dark(palette: palette),
+            themeMode: themeMode,
+            routerConfig: appRouter,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en')],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Fires the silent launch-time update check once, after the first frame.
+/// The result is only surfaced on the Settings → About card — never as a
+/// modal or an error toast.
+class _UpdateNudge extends ConsumerStatefulWidget {
+  const _UpdateNudge({required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_UpdateNudge> createState() => _UpdateNudgeState();
+}
+
+class _UpdateNudgeState extends ConsumerState<_UpdateNudge> {
+  bool _fired = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_fired) return;
+    _fired = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(updateControllerProvider.notifier).silentCheck();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

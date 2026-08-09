@@ -59,44 +59,64 @@ void main() {
 
   group('UpdateChecker.check', () {
     test('returns UpdateInfo for a newer release', () async {
-      final client = MockClient(
-        (request) async {
-          expect(request.url.path, endsWith('/releases/latest'));
-          return http.Response(
-            jsonEncode({
-              'tag_name': 'v0.3.0',
-              'html_url': 'https://github.com/ajcabando/Peso-FinFlow/releases/tag/v0.3.0',
-              'published_at': '2026-09-01T00:00:00Z',
-            }),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        },
-      );
+      final client = MockClient((request) async {
+        expect(request.url.path, endsWith('/releases/latest'));
+        return http.Response(
+          jsonEncode({
+            'tag_name': 'v0.3.0',
+            'html_url':
+                'https://github.com/ajcabando/Peso-FinFlow/releases/tag/v0.3.0',
+            'published_at': '2026-09-01T00:00:00Z',
+            'body': '## Highlights\n- Profile feature\n- Update checker',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
       final checker = UpdateChecker(httpClient: client);
       final update = await checker.check(currentVersion: '0.2.0');
 
       expect(update, isNotNull);
       expect(update!.version, '0.3.0');
       expect(update.url, contains('/releases/tag/v0.3.0'));
+      expect(update.notes, contains('Profile feature'));
       expect(update.publishedAt, DateTime.parse('2026-09-01T00:00:00Z'));
     });
 
-    test('returns null when the installed version is already current', () async {
+    test('release without a body yields empty notes', () async {
       final client = MockClient(
         (_) async => http.Response(
-          jsonEncode({'tag_name': 'v0.2.0', 'html_url': 'https://x/y'}),
+          jsonEncode({'tag_name': 'v0.3.0', 'html_url': 'https://x/y'}),
           200,
         ),
       );
       final checker = UpdateChecker(httpClient: client);
       final update = await checker.check(currentVersion: '0.2.0');
 
-      expect(update, isNull);
+      expect(update, isNotNull);
+      expect(update!.notes, isEmpty);
     });
 
+    test(
+      'returns null when the installed version is already current',
+      () async {
+        final client = MockClient(
+          (_) async => http.Response(
+            jsonEncode({'tag_name': 'v0.2.0', 'html_url': 'https://x/y'}),
+            200,
+          ),
+        );
+        final checker = UpdateChecker(httpClient: client);
+        final update = await checker.check(currentVersion: '0.2.0');
+
+        expect(update, isNull);
+      },
+    );
+
     test('throws UpdateCheckException on a non-200 response', () async {
-      final client = MockClient((_) async => http.Response('rate limited', 403));
+      final client = MockClient(
+        (_) async => http.Response('rate limited', 403),
+      );
       final checker = UpdateChecker(httpClient: client);
 
       expect(
@@ -140,6 +160,58 @@ void main() {
 
       expect(status.state, UpdateCheckState.error);
       expect(status.error, contains("Couldn't determine"));
+    });
+
+    test('silentCheck surfaces an update without any error state', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final checker = UpdateChecker(
+        httpClient: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'tag_name': 'v0.3.0',
+              'html_url': 'https://x/y',
+              'body': '## Highlights',
+            }),
+            200,
+          ),
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          currentAppVersionProvider.overrideWith((ref) async => '0.2.0'),
+          updateCheckerProvider.overrideWithValue(checker),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(updateControllerProvider.notifier).silentCheck();
+
+      final status = container.read(updateControllerProvider);
+      expect(status.state, UpdateCheckState.updateAvailable);
+      expect(status.latest?.version, '0.3.0');
+      expect(status.error, isNull);
+    });
+
+    test('a failed silentCheck leaves the previous state untouched', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final failingChecker = UpdateChecker(
+        httpClient: MockClient((_) async => http.Response('rate limited', 403)),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          currentAppVersionProvider.overrideWith((ref) async => '0.2.0'),
+          updateCheckerProvider.overrideWithValue(failingChecker),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(updateControllerProvider.notifier).silentCheck();
+
+      // No update advertised, no error surfaced — the card stays neutral.
+      final status = container.read(updateControllerProvider);
+      expect(status.state, UpdateCheckState.idle);
+      expect(status.latest, isNull);
+      expect(status.error, isNull);
     });
   });
 }

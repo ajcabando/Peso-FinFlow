@@ -4,6 +4,7 @@ class UpdateInfo {
   const UpdateInfo({
     required this.version,
     required this.url,
+    this.notes = '',
     this.publishedAt,
   });
 
@@ -12,6 +13,10 @@ class UpdateInfo {
 
   /// The release page URL (opens in the browser).
   final String url;
+
+  /// The release notes (markdown), as written on GitHub. Empty when the
+  /// release has no body.
+  final String notes;
 
   /// When the release was published, when the API provided it.
   final DateTime? publishedAt;

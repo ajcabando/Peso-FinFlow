@@ -1,6 +1,7 @@
 import 'package:file_saver/file_saver.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -48,7 +49,10 @@ class SettingsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        // Bottom padding clears the shell's floating quick-actions FAB so it
+        // never covers the last cards (About, check-for-updates) — same 96px
+        // clearance the other shell tabs use.
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           _ProfileHeader(),
           const SizedBox(height: AppSpacing.xl),
@@ -197,7 +201,6 @@ class SettingsPage extends ConsumerWidget {
           const SizedBox(height: AppSpacing.xl),
           const SectionHeader(title: 'About'),
           const _AboutCard(),
-          const SizedBox(height: AppSpacing.xxl),
         ],
       ),
     );
@@ -875,10 +878,51 @@ class _AboutCard extends ConsumerWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Update available'),
-        content: Text(
-          'Peso-FinFlow v${latest.version} is ready to install.\n\n'
-          "You're running v${status.currentVersion ?? '?'}. Open the release "
-          'page to grab the latest build.',
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Peso-FinFlow v${latest.version} is ready to install — '
+                "you're running v${status.currentVersion ?? '?'}.",
+                style: dialogContext.textTheme.bodyMedium,
+              ),
+              if (latest.notes.isEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'No release notes provided.',
+                  style: dialogContext.textTheme.bodySmall?.copyWith(
+                    color: dialogContext.colors.onSurfaceVariant,
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: AppSpacing.md),
+                const Divider(height: 1),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  "What's new",
+                  style: dialogContext.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                // Cap the notes area to 40% of the screen height (max 280)
+                // so long notes scroll without overflowing short viewports
+                // such as landscape phones.
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: (MediaQuery.sizeOf(dialogContext).height * 0.4)
+                        .clamp(0.0, 280.0),
+                  ),
+                  child: SingleChildScrollView(
+                    child: MarkdownBody(data: latest.notes),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
         actions: [
           TextButton(

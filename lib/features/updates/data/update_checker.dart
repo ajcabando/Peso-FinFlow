@@ -78,6 +78,7 @@ class UpdateChecker {
     return UpdateInfo(
       version: version,
       url: url,
+      notes: decoded['body'] as String? ?? '',
       publishedAt: publishedRaw == null ? null : DateTime.tryParse(publishedRaw),
     );
   }

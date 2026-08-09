@@ -55,23 +55,32 @@ class UpdateStatus {
   );
 }
 
+/// Sentinel for "we could not read the installed version". Checks are gated on
+/// this so users are never told a release is newer than an unknown version.
+const String kUnknownVersion = '0.0.0';
+
+/// The installed app version (package_info), falling back to
+/// [kUnknownVersion] when the plugin is unavailable (tests, edge platforms).
+/// Override in tests to exercise the update flow without the plugin.
+final currentAppVersionProvider = FutureProvider<String>((ref) async {
+  try {
+    final info = await PackageInfo.fromPlatform();
+    if (info.version.isNotEmpty) return info.version;
+  } on Exception {
+    // Fall through to the fallback.
+  }
+  return kUnknownVersion;
+});
+
 /// The [UpdateChecker] used by the controller. Override in tests to avoid
 /// real network calls.
-final updateCheckerProvider = Provider<UpdateChecker>(
-  (ref) => UpdateChecker(),
-);
+final updateCheckerProvider = Provider<UpdateChecker>((ref) => UpdateChecker());
 
 /// The update-check state for Settings → About.
-final updateControllerProvider = NotifierProvider<UpdateController, UpdateStatus>(
-  UpdateController.new,
-);
+final updateControllerProvider =
+    NotifierProvider<UpdateController, UpdateStatus>(UpdateController.new);
 
 class UpdateController extends Notifier<UpdateStatus> {
-  /// Sentinel for "we could not read the installed version". The check is
-  /// gated on this so users are never told a release is newer than an unknown
-  /// version.
-  static const String kUnknownVersion = '0.0.0';
-
   @override
   UpdateStatus build() {
     _loadCurrentVersion();
@@ -79,20 +88,8 @@ class UpdateController extends Notifier<UpdateStatus> {
   }
 
   Future<void> _loadCurrentVersion() async {
-    final version = await _readInstalledVersion();
+    final version = await ref.read(currentAppVersionProvider.future);
     state = state.copyWith(currentVersion: version);
-  }
-
-  /// Reads the installed version from package_info, falling back to
-  /// [kUnknownVersion] when the plugin is unavailable (tests, edge platforms).
-  Future<String> _readInstalledVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (info.version.isNotEmpty) return info.version;
-    } on Exception {
-      // Fall through to the fallback.
-    }
-    return kUnknownVersion;
   }
 
   /// Runs the check against the GitHub releases feed and returns the
@@ -103,7 +100,7 @@ class UpdateController extends Notifier<UpdateStatus> {
   Future<UpdateStatus> checkForUpdates() async {
     state = const UpdateStatus(state: UpdateCheckState.checking);
     try {
-      final current = state.currentVersion ?? await _readInstalledVersion();
+      final current = await _currentVersion();
       if (current.isEmpty || current == kUnknownVersion) {
         state = UpdateStatus(
           state: UpdateCheckState.error,
@@ -135,4 +132,31 @@ class UpdateController extends Notifier<UpdateStatus> {
     }
     return state;
   }
+
+  /// Silent launch-time nudge: when a newer release exists it is stored so
+  /// the Settings → About card can advertise it ("Update available — vX")
+  /// without any modal. Failures and \"already current\" results are never
+  /// surfaced — a failed check simply leaves the previous state untouched.
+  Future<void> silentCheck() async {
+    final previous = state;
+    try {
+      final current = await _currentVersion();
+      if (current.isEmpty || current == kUnknownVersion) return;
+      final latest = await ref
+          .read(updateCheckerProvider)
+          .check(currentVersion: current);
+      if (latest != null) {
+        state = UpdateStatus(
+          state: UpdateCheckState.updateAvailable,
+          currentVersion: current,
+          latest: latest,
+        );
+      }
+    } on Exception {
+      state = previous;
+    }
+  }
+
+  Future<String> _currentVersion() async =>
+      state.currentVersion ?? await ref.read(currentAppVersionProvider.future);
 }

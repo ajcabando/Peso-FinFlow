@@ -21,45 +21,56 @@ class AppNavigationShell extends StatelessWidget {
         Theme.of(context).extension<FinFlowTheme>()?.heroGradient ??
         const [AppColors.brandBright, AppColors.brand];
 
+    // Settings (index 4) is where you manage the app, not where you add
+    // transactions/accounts — hide the quick-actions FAB there so it never
+    // floats over the profile card or About section.
+    final showFab = shell.currentIndex != 4;
+
     return Scaffold(
       body: shell,
-      floatingActionButton: SizedBox(
-        width: 60,
-        height: 60,
-        child: FloatingActionButton(
-          onPressed: () => showModalBottomSheet<void>(
-            context: context,
-            showDragHandle: true,
-            builder: (_) => const QuickActionsSheet(),
-          ),
-          tooltip: 'Quick actions',
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadii.lg),
-          ),
-          child: Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: heroGradient,
-              ),
-              borderRadius: BorderRadius.circular(AppRadii.lg),
-              boxShadow: [
-                BoxShadow(
-                  color: heroGradient.last.withValues(alpha: 0.45),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
+      floatingActionButton: showFab
+          ? SizedBox(
+              width: 60,
+              height: 60,
+              child: FloatingActionButton(
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (_) => const QuickActionsSheet(),
                 ),
-              ],
-            ),
-            child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
-          ),
-        ),
-      ),
+                tooltip: 'Quick actions',
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
+                ),
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: heroGradient,
+                    ),
+                    borderRadius: BorderRadius.circular(AppRadii.lg),
+                    boxShadow: [
+                      BoxShadow(
+                        color: heroGradient.last.withValues(alpha: 0.45),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.add_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+              ),
+            )
+          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: _FloatingNavBar(shell: shell),
     );
@@ -127,8 +138,10 @@ class _FloatingNavBar extends StatelessWidget {
                   label: _destinations[i].label,
                   selected: shell.currentIndex == i,
                   gradient: heroGradient,
-                  onTap: () =>
-                      shell.goBranch(i, initialLocation: i == shell.currentIndex),
+                  onTap: () => shell.goBranch(
+                    i,
+                    initialLocation: i == shell.currentIndex,
+                  ),
                 ),
               ),
           ],
@@ -158,7 +171,9 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
-    final muted = isDark ? AppColors.textOnDarkSecondary : AppColors.textSecondary;
+    final muted = isDark
+        ? AppColors.textOnDarkSecondary
+        : AppColors.textSecondary;
 
     return Semantics(
       selected: selected,
@@ -200,9 +215,7 @@ class _NavItem extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 9.5,
-                  fontWeight: selected
-                      ? FontWeight.w600
-                      : FontWeight.w500,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                   color: selected ? Colors.white : muted,
                 ),
               ),

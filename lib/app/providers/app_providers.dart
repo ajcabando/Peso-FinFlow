@@ -24,6 +24,12 @@ abstract final class SettingsKeys {
   static const String securityPin = 'security.pinHash';
   static const String securityBiometrics = 'security.biometrics';
   static const String securityAutoLock = 'security.autoLock';
+
+  // Profile: display name + avatar picture (base64 data URI). These are
+  // regular (non-secret) keys, so they sync across devices like any other
+  // app setting.
+  static const String profileName = 'profile.name';
+  static const String profilePicture = 'profile.picture';
 }
 
 /// The single application-wide database instance.

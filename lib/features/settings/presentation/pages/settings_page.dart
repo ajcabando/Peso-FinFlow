@@ -13,6 +13,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_button.dart';
+import '../../../../shared/widgets/profile_avatar.dart';
 import '../../../../shared/widgets/section_header.dart';
 import '../../../accounts/domain/enums/account_type.dart';
 import '../../../accounts/domain/models/account.dart';
@@ -24,6 +25,8 @@ import '../../../bills/presentation/providers/bill_providers.dart';
 import '../../../budgets/presentation/providers/budget_providers.dart';
 import '../../../security/data/biometric_service.dart';
 import '../../../security/presentation/providers/security_providers.dart';
+import '../../../profile/presentation/providers/profile_providers.dart';
+import '../../../profile/presentation/widgets/profile_edit_sheet.dart';
 import '../../../security/presentation/widgets/pin_setup_sheet.dart';
 import '../../../sync/presentation/providers/sync_providers.dart';
 import '../../../sync/presentation/widgets/cloud_backup_card.dart';
@@ -353,14 +356,31 @@ class _CategoryGroup extends StatelessWidget {
   }
 }
 
-/// Profile hero card shown at the top of Settings.
-class _ProfileHeader extends StatelessWidget {
+/// Profile hero card at the top of Settings: the user's name, avatar and an
+/// edit entry that opens the profile sheet. Before a name is set it nudges
+/// the user to add one so the dashboard can greet them.
+class _ProfileHeader extends ConsumerWidget {
+  const _ProfileHeader();
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final profile = ref.watch(profileProvider);
+    final sync = ref.watch(syncControllerProvider);
     final heroGradient =
         Theme.of(context).extension<FinFlowTheme>()?.heroGradient ??
         const [AppColors.brandBright, AppColors.brand];
+
+    final String subtitle;
+    if (profile.name.isNotEmpty) {
+      final email = sync.email;
+      subtitle = sync.signedIn && email != null && email.isNotEmpty
+          ? email
+          : 'Tap edit to update your profile';
+    } else {
+      subtitle =
+          'Add your name and photo — FinFlow greets you on the dashboard.';
+    }
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -382,16 +402,18 @@ class _ProfileHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 56,
-            height: 56,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.5),
+                width: 2,
+              ),
             ),
-            child: const Icon(
-              Icons.person_outline,
-              color: Colors.white,
-              size: 30,
+            child: ProfileAvatar(
+              picture: profile.picture,
+              size: 56,
+              iconSize: 30,
+              onTap: () => showProfileEditSheet(context),
             ),
           ),
           const SizedBox(width: AppSpacing.lg),
@@ -400,7 +422,7 @@ class _ProfileHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  AppConstants.appName,
+                  profile.name.isEmpty ? 'Your profile' : profile.name,
                   style: theme.textTheme.titleLarge?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -408,14 +430,23 @@ class _ProfileHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  AppConstants.tagline,
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.8),
                     fontSize: 12.5,
+                    height: 1.35,
                   ),
                 ),
               ],
             ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          IconButton(
+            tooltip: 'Edit profile',
+            onPressed: () => showProfileEditSheet(context),
+            icon: const Icon(Icons.edit_rounded, color: Colors.white),
           ),
         ],
       ),

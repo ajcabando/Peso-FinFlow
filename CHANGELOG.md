@@ -4,6 +4,14 @@ All notable changes to **FinFlow** are documented here. This project follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- **Profile** — set your display name and avatar photo (Settings → top card, or tap the dashboard avatar); the dashboard greets you by first name ("Good morning, Alain"). Photos are decoded with the native codec (HEIC included), resized to fit 384px and re-encoded as a compact JPEG, then stored as a small data URI in `app_settings` (`profile.*` keys) so the profile syncs across devices whenever cloud sync is on.
+
+### Test
+
+- **229 Flutter tests** — profile greeting (fallback + by-name), avatar → editor tap, settings profile card, and the name-save flow in `test/widget/profile_test.dart`.
+
 ## [0.2.0] — 2026-08-09
 
 ### Added — Self-hosted sync platform (Phases 1–9)

@@ -6,10 +6,10 @@ import '../../../../app/providers/app_providers.dart';
 import '../../../../app/router/app_router.dart';
 import '../../../../core/extensions/context_extensions.dart';
 import '../../../../core/extensions/date_time_extensions.dart';
-import '../../../../core/theme/app_palette.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/profile_avatar.dart';
 import '../../../../shared/widgets/section_header.dart';
 import '../../../accounts/domain/repositories/account_repository.dart';
 import '../../../accounts/presentation/providers/account_providers.dart';
@@ -21,6 +21,8 @@ import '../../../budgets/presentation/providers/budget_providers.dart';
 import '../../../budgets/presentation/widgets/budget_progress_tile.dart';
 import '../../../transactions/presentation/providers/transaction_providers.dart';
 import '../../../transactions/presentation/widgets/transaction_list_tile.dart';
+import '../../../profile/presentation/providers/profile_providers.dart';
+import '../../../profile/presentation/widgets/profile_edit_sheet.dart';
 import '../widgets/balance_card.dart';
 import '../widgets/cash_flow_chart.dart';
 import '../widgets/category_spend_section.dart';
@@ -477,23 +479,23 @@ class _DashboardAccounts extends StatelessWidget {
   }
 }
 
-/// Time-aware greeting ("Good morning") with the current date and an avatar.
-class _GreetingHeader extends StatelessWidget {
+/// Time-aware greeting ("Good morning, Alain") with the current date and the
+/// user's avatar. Greets by first name when a profile name is set; tapping
+/// the avatar opens the profile editor.
+class _GreetingHeader extends ConsumerWidget {
   const _GreetingHeader();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = context.theme;
+    final profile = ref.watch(profileProvider);
     final hour = DateTime.now().hour;
     final greeting = hour < 12
         ? 'Good morning'
         : hour < 18
         ? 'Good afternoon'
         : 'Good evening';
-
-    final heroGradient =
-        Theme.of(context).extension<FinFlowTheme>()?.heroGradient ??
-        const [Color(0xFF9C6BFF), Color(0xFF6D5DF6)];
+    final firstName = profile.firstName;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -504,7 +506,7 @@ class _GreetingHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  greeting,
+                  firstName.isEmpty ? greeting : '$greeting, $firstName',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.3,
@@ -521,21 +523,19 @@ class _GreetingHeader extends StatelessWidget {
             ),
           ),
           Container(
-            width: 42,
-            height: 42,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: heroGradient,
-              ),
               shape: BoxShape.circle,
               border: Border.all(
                 color: theme.colorScheme.surface.withValues(alpha: 0.6),
                 width: 2,
               ),
             ),
-            child: const Icon(Icons.person_rounded, color: Colors.white, size: 24),
+            child: ProfileAvatar(
+              picture: profile.picture,
+              size: 42,
+              iconSize: 24,
+              onTap: () => showProfileEditSheet(context),
+            ),
           ),
         ],
       ),

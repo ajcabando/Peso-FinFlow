@@ -6,7 +6,7 @@ FinFlow — local-first, offline-first personal finance app (Android/iOS/iPadOS/
 - Setup: Flutter 3.44+ is at `~/flutter` — `export PATH="$HOME/flutter/bin:$PATH"`, then `flutter pub get`
 - Codegen (required after touching Drift tables/DAOs): `dart run build_runner build`
 - Dev: `flutter run` (desktop/mobile) or `flutter run -d chrome` (web)
-- Test: `flutter test` (currently **223 tests**: unit + repository + widget + stress)
+- Test: `flutter test` (currently **229 tests**: unit + repository + widget + stress)
 - Lint: `flutter analyze` (must stay clean)
 - Build: `flutter build web` → serve `build/web` (DB runs in SQLite WASM via `web/sqlite3.wasm` + `web/drift_worker.js`)
 
@@ -17,6 +17,7 @@ FinFlow — local-first, offline-first personal finance app (Android/iOS/iPadOS/
 - **go_router** with `StatefulShellRoute.indexedStack` (Dashboard / Accounts / Settings tabs).
 - Key docs: `docs/architecture.md`, `docs/database.md`. Master roadmap is in `README.md`.
 - Feature modules added since the original scaffold: `features/bills/` (recurring bills + mark-paid), `features/reports/` (month report, CSV/PDF export), `features/backup/` (portable JSON snapshot), `features/security/` (PIN lock + biometrics). Dashboard watches `billsProvider` — **widget tests must override it** (see `test/helpers/widget_harness.dart`).
+- **Profile (2026-08-10)**: `features/profile/` — display name + avatar photo stored in `app_settings` keys `profile.name` / `profile.picture` (NOT under the `security.` local-only prefix → syncs across devices like any setting, and travels with JSON backups). Photos are picked via `file_selector`'s `openFile`, decoded with `dart:ui` `instantiateImageCodec` (handles HEIC), resized to ≤ 384px and re-encoded as JPEG via `package:image` (quality 85) so the stored data URI stays well under the 100 KB per-op sync limit. **Clearing the photo stores `''`** (never deletes the row) so the removal propagates through op-log sync like any value change. Dashboard `_GreetingHeader` greets by first name (`Good morning, Alain`); shared `ProfileAvatar` (`shared/widgets/`) renders the photo or a gradient person fallback; Settings' profile hero card shows name/email + edit. Covered by `test/widget/profile_test.dart` (6 tests).
 
 ## Cloud sync (Supabase) — schema v4, added 2026-08-07
 > **Deprecated path**: the self-hosted migration plan (`docs/SELF_HOSTED.md` + `docs/BACKEND_API.md`) replaces this Supabase implementation; it stays live until Phase 6 (op-log client lands).

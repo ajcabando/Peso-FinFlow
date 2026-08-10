@@ -1,8 +1,10 @@
 # Changelog
 
-All notable changes to **FinFlow** are documented here. This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions and uses the package version from `pubspec.yaml` (`0.2.0+1`).
+All notable changes to **FinFlow** are documented here. This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions and uses the package version from `pubspec.yaml` (`0.2.1+1`).
 
 ## [Unreleased]
+
+## [0.2.1] — 2026-08-10
 
 ### Added
 

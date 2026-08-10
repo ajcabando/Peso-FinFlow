@@ -62,6 +62,29 @@ flutter analyze                      # lint
 
 The web target ships a SQLite WASM build (`web/sqlite3.wasm` + `web/drift_worker.js`) so the database runs fully in the browser with File System API persistence. Build with `flutter build web` and serve the `build/web` directory.
 
+### Docker deployment (web app + marketing site)
+
+One image serves **both** the Flutter web app (**:8372**) and the marketing/download website (**:8373**), so you can deploy to any server with Docker alone:
+
+```bash
+# Build & run (web app :8372, marketing site :8373)
+docker compose -f docker-compose.web.yml up -d --build
+
+# Point the app at your self-hosted API (same repo's backend stack):
+FINFLOW_API_URL=http://<server>:8080 docker compose -f docker-compose.web.yml up -d --build
+
+# Custom host ports (defaults 8372/8373):
+WEB_PORT=80 SITE_PORT=443 FINFLOW_API_URL=https://api.example.com \
+  docker compose -f docker-compose.web.yml up -d --build
+```
+
+- The image is multi-stage: the Flutter build stage (pinned SDK 3.44.8, `linux/amd64` so it emulates on Apple Silicon) compiles `--release --pwa-strategy=offline-first`, and the nginx runtime stage serves the app at `/usr/share/nginx/html/app` and the site at `/usr/share/nginx/html/site`.
+- **Ports are runtime-configurable** via `WEB_PORT` / `SITE_PORT` env vars — the nginx config is templated at container start (`deploy/docker/entrypoint.sh` + `deploy/docker/nginx-finflow.conf.template`), so one image deploys anywhere.
+- `FINFLOW_API_URL` is compiled into the app at build time (default `http://127.0.0.1:8080`, which only works on the machine hosting the API — set it to your server's real address).
+- `FINFLOW_DEMO_DATA=true` seeds demo data on first launch (screenshots).
+- The marketing site derives its "Launch app" links from the hostname it's served on, so the same static site works on localhost and your server (override per-visitor with `?app=<url>`).
+- Both containers join the `finflow_proxy` network so your host nginx can reverse-proxy them with TLS by container name — see `deploy/nginx-finflow-web.conf.example`. The build-only export (`docker build --target artifact -o build/web .`) still works for the old host-nginx workflow (`deploy/nginx-finflow.conf.example`).
+
 ### Release artifacts
 
 Android APK (`dist/FinFlow-v0.1.0.apk`), macOS DMG, the **signed iOS IPA** (`dist/FinFlow-signed.ipa` — development-signed for devices registered to team `25FHU3ZF38`) and the unsigned iOS build are covered in [`docs/BUILDING.md`](docs/BUILDING.md). All are attached to the [v0.1.0 GitHub release](https://github.com/ajcabando/FinFlow/releases/tag/v0.1.0). The Android toolchain is installed on this machine; macOS/iOS need Xcode (install steps in the guide).

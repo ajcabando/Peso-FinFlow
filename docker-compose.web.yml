@@ -1,0 +1,49 @@
+# FinFlow front-end stack — web app (:8372) + marketing website (:8373).
+#
+# One image (root Dockerfile, nginx runtime) serving both. Deploy standalone:
+#   docker compose -f docker-compose.web.yml up -d --build
+#   → http://<server>:8372  (the Flutter web app / PWA)
+#   → http://<server>:8373  (the marketing site)
+#
+# Or alongside the backend stack (docker-compose.yml) — both compose files
+# share the `finflow` project name, so the web app can reach finflow-api and
+# nginx can reach everything on the `finflow_proxy` network.
+#
+# Configuration (all optional, defaults in brackets):
+#   FINFLOW_API_URL   — API base URL compiled into the app. Default
+#                       http://127.0.0.1:8080 only works on the machine
+#                       hosting the API — set it to the server's real
+#                       address (e.g. http://192.168.1.50:8080 or
+#                       https://api.finflow.example.com).
+#   FINFLOW_DEMO_DATA — true → seed demo data on first launch.
+#   WEB_PORT          — host port for the app  [8372]
+#   SITE_PORT         — host port for the site [8373]
+#   PROXY_NETWORK     — shared nginx network  [finflow_proxy]
+
+name: finflow
+
+networks:
+  # Shared nginx reverse-proxy network — the web/website containers join it
+  # so your host nginx can reach them by container name with TLS.
+  proxy:
+    name: ${PROXY_NETWORK:-finflow_proxy}
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        FINFLOW_API_URL: ${FINFLOW_API_URL:-http://127.0.0.1:8080}
+        FINFLOW_DEMO_DATA: ${FINFLOW_DEMO_DATA:-false}
+    image: finflow-web:latest
+    restart: unless-stopped
+    environment:
+      WEB_PORT: 8372
+      SITE_PORT: 8373
+    ports:
+      - "${WEB_PORT:-8372}:8372"
+      - "${SITE_PORT:-8373}:8373"
+    # Joins the proxy network so your host nginx can reverse-proxy both
+    # services by container name (finflow-web-1 / finflow-website-1) with
+    # TLS — see deploy/nginx-finflow-web.conf.example.
+    networks: [proxy]

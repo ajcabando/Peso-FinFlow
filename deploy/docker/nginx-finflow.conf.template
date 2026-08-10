@@ -1,0 +1,98 @@
+# Peso-FinFlow web image — nginx config template.
+#
+# Rendered at container start by entrypoint.sh: the __WEB_PORT__ and
+# __SITE_PORT__ placeholders are replaced with the WEB_PORT / SITE_PORT
+# environment variables (defaults 8372 / 8373), so the same image deploys
+# to any host/port mapping.
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent"';
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65;
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # ------------------------------------------------------------------
+    # Web app (Flutter) — the PWA lives here.
+    # ------------------------------------------------------------------
+    server {
+        listen __WEB_PORT__;
+        server_name _;
+
+        root /usr/share/nginx/html/app;
+        index index.html;
+
+        # SQLite WASM (drift) must be served as application/wasm, or the
+        # database fails to load. sqlite3.wasm is NOT content-hashed, so
+        # never cache it immutably.
+        location ~* \.wasm$ {
+            types { application/wasm wasm; }
+            default_type application/wasm;
+            add_header Cache-Control "no-cache";
+        }
+
+        # Un-hashed entry files change with every release — no-cache only.
+        location ~* ^/(main\.dart\.js|flutter\.js|flutter_bootstrap\.js|drift_worker\.js)$ {
+            add_header Cache-Control "no-cache";
+        }
+
+        # The PWA service worker must always be revalidated.
+        location = /flutter_service_worker.js {
+            add_header Cache-Control "no-cache";
+        }
+
+        # Hashed Flutter assets — cache forever.
+        location /assets/ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # SPA fallback for go_router deep links (/accounts, /analytics, …).
+        location / {
+            try_files $uri $uri/ /index.html;
+            add_header Cache-Control "no-cache";
+        }
+    }
+
+    # ------------------------------------------------------------------
+    # Marketing website — the downloadable landing page.
+    # ------------------------------------------------------------------
+    server {
+        listen __SITE_PORT__;
+        server_name _;
+
+        root /usr/share/nginx/html/site;
+        index index.html;
+
+        location /assets/ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        location ~* \.(css|js|wasm)$ {
+            add_header Cache-Control "no-cache";
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+            add_header Cache-Control "no-cache";
+        }
+    }
+}

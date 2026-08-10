@@ -23,6 +23,7 @@ import '../../../transactions/presentation/providers/transaction_providers.dart'
 import '../../../transactions/presentation/widgets/transaction_list_tile.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
 import '../../../profile/presentation/widgets/profile_edit_sheet.dart';
+import '../../../whatsnew/presentation/widgets/whats_new_banner.dart';
 import '../widgets/balance_card.dart';
 import '../widgets/cash_flow_chart.dart';
 import '../widgets/category_spend_section.dart';
@@ -118,6 +119,8 @@ class DashboardPage extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
           children: [
             const _GreetingHeader(),
+            const SizedBox(height: AppSpacing.sm),
+            const WhatsNewBanner(),
             const SizedBox(height: AppSpacing.lg),
             netWorthAsync.when(
               loading: () => const SizedBox(

@@ -30,6 +30,10 @@ abstract final class SettingsKeys {
   // app setting.
   static const String profileName = 'profile.name';
   static const String profilePicture = 'profile.picture';
+
+  // "What's new" banner: the last content revision the user dismissed.
+  // Regular (non-secret) key — dismissing once hides it on every device.
+  static const String whatsNewLastSeen = 'whatsnew.lastSeen';
 }
 
 /// The single application-wide database instance.

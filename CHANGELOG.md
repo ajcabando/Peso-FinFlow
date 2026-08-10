@@ -8,6 +8,7 @@ All notable changes to **FinFlow** are documented here. This project follows [Ke
 
 - **Profile** — set your display name and avatar photo (Settings → top card, or tap the dashboard avatar); the dashboard greets you by first name ("Good morning, Alain"). Photos are decoded with the native codec (HEIC included), resized to fit 384px and re-encoded as a compact JPEG, then stored as a small data URI in `app_settings` (`profile.*` keys) so the profile syncs across devices whenever cloud sync is on.
 - **Update checking** — Settings → About now shows the real installed version (from package_info, no more hardcoded numbers) with a "Check for updates" action that queries the public GitHub releases feed (`ajcabando/Peso-FinFlow`); when a newer build exists an in-app dialog offers to open its release page (via `url_launcher`) and renders the release's "What's new" notes as markdown (`flutter_markdown`). Numeric semver comparison ignores `v` prefixes and build metadata; the check is gated when the installed version can't be read so it never claims a release is newer than an unknown version. A **silent launch-time check** pre-advertises an available update on the About card (no modal, no error toasts).
+- **What's new banner** — a dismissible strip at the top of the dashboard that summarises recent changes (profile, update checker, sync & backups) with a link to the full changelog. It's shown once per content revision — dismissing persists `whatsnew.lastSeen` in `app_settings` (a syncing key, so dismissing once hides it everywhere) and the copy is compiled into the build, so it can never describe features an older build doesn't have.
 
 ### Fixed
 
@@ -15,7 +16,7 @@ All notable changes to **FinFlow** are documented here. This project follows [Ke
 
 ### Test
 
-- **250 Flutter tests** — profile greeting + edit flow, plus the update checker: version comparison, GitHub API parsing (mock HTTP client), the unknown-version gate, silent launch-time check (found + failed), and every button/dialog state of the About card including the "What's new" notes and empty-notes fallback.
+- **254 Flutter tests** — profile greeting + edit flow, the update checker (version comparison, GitHub API parsing, unknown-version gate, silent launch-time check, About-card states), and the What's new banner (shows by default, dismiss persists the revision, stays hidden on relaunch, hidden when already seen).
 
 ## [0.2.0] — 2026-08-09
 

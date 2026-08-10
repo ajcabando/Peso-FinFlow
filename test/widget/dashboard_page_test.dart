@@ -217,7 +217,9 @@ void main() {
   testWidgets('compact account strip does not overflow on a narrow phone', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(360, 800);
+    // Tall enough that the accounts section (below the What's-new banner)
+    // is built by the lazy ListView on this narrow viewport.
+    tester.view.physicalSize = const Size(360, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
